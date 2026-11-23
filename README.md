@@ -101,7 +101,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 5. Keep high/critical **automatic case intake disabled** until an operator authorizes it. It is evidence-only and capped at **30 cases per rolling hour**.
 6. Run **Emergency Auto-Containment in simulation first**. Real nftables enforcement requires a separately provisioned host-local helper, reviewed protected networks/signature allowlists, and an explicit operator **ARM** action. Review its [rollout and reversal checklist](docs/DEFENSE_EMERGENCY.md) before considering any live deployment.
 
-**Deployment note:** The passive SOC accepts authenticated JSON event batches, not anonymous public telemetry. Its current ingest API uses console session authentication rather than dedicated least-privileged collector credentials. Protect that token and the network boundary; do not expose an admin token in an Internet-facing forwarder.
+**Secure collectors (PR #10):** Provision one restricted credential per sensor through the admin-only `/api/defense/collectors` API and send events to `/api/defense/collector/events` using the durable SQLite-backed forwarder. Admin JWTs are **not** collector credentials. Collector-origin telemetry is not permitted to trigger the emergency response fast path. See [Secure collectors and durable delivery](docs/DEFENSE_PHASE10.md).
 
 ### Defensive response safety
 

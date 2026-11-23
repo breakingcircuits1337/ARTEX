@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -71,6 +72,19 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	collector := collectorFromContext(r.Context())
+	if r.URL.Path == "/api/defense/collector/events" {
+		if collector == nil {
+			writeErr(w, 401, "invalid collector credential")
+			return
+		}
+		for _, e := range events {
+			if e.Source != collector.Source {
+				writeErr(w, 403, "collector source scope mismatch")
+				return
+			}
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	tx, err := pg.BeginTx(ctx, nil)
@@ -79,6 +93,29 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+	var collectorID any
+	if collector != nil {
+		valid, err := validateCollectorTransaction(ctx, tx, collector)
+		if err != nil {
+			writeErr(w, 503, "collector policy unavailable")
+			return
+		}
+		if !valid {
+			writeErr(w, 401, "collector credential changed or revoked")
+			return
+		}
+		collectorID = collector.ID
+		allowed, err := s.reserveCollectorBudget(ctx, tx, collector.ID, len(events))
+		if err != nil {
+			writeErr(w, 503, "collector rate policy unavailable")
+			return
+		}
+		if !allowed {
+			w.Header().Set("Retry-After", "60")
+			writeErr(w, 429, "collector event rate exceeded (600 per minute)")
+			return
+		}
+	}
 	ingested, duplicates, alertCount, linked := 0, 0, 0, 0
 	emergencyActionIDs := make([]int64, 0, 4)
 	for _, e := range events {
@@ -95,10 +132,10 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		err = tx.QueryRowContext(ctx, `
    INSERT INTO defense_events
-   (source,external_id,observed_at,kind,outcome,action,src_ip,dst_ip,host,username,signature,severity,vendor_alert,asset_ids)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
-   ON CONFLICT(source,external_id) DO NOTHING RETURNING id
-  `, e.Source, e.ExternalID, e.ObservedAt, e.Kind, e.Outcome, e.Action, e.SrcIP, e.DstIP, e.Host, e.Username, e.Signature, e.Severity, e.VendorAlert, string(assetJSON)).Scan(&id)
+   (source,external_id,observed_at,kind,outcome,action,src_ip,dst_ip,host,username,signature,severity,vendor_alert,asset_ids,collector_id)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15)
+   ON CONFLICT DO NOTHING RETURNING id
+  `, e.Source, e.ExternalID, e.ObservedAt, e.Kind, e.Outcome, e.Action, e.SrcIP, e.DstIP, e.Host, e.Username, e.Signature, e.Severity, e.VendorAlert, string(assetJSON), collectorID).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			duplicates++
 			continue
@@ -111,8 +148,12 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		if len(ids) > 0 {
 			linked++
 		}
+		correlationKey := e.ExternalID
+		if collector != nil {
+			correlationKey = fmt.Sprintf("collector:%d:%s", collector.ID, correlationKey)
+		}
 		for _, hit := range defense.EvaluateEvent(e) {
-			created, err := insertDefenseAlert(ctx, tx, id, e.ExternalID, e.ObservedAt, hit, assetJSON)
+			created, err := insertDefenseAlert(ctx, tx, id, correlationKey, e.ObservedAt, hit, assetJSON)
 			if err != nil {
 				writeErr(w, 503, "alert persistence failed")
 				return
@@ -129,7 +170,8 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
     SELECT COUNT(DISTINCT lower(username)) FROM defense_events
     WHERE kind='authentication' AND outcome='failure' AND src_ip=$1
       AND username<>'' AND observed_at BETWEEN $2 AND $3
-   `, e.SrcIP, e.ObservedAt.Add(-10*time.Minute), e.ObservedAt).Scan(&users)
+      AND collector_id IS NOT DISTINCT FROM $4::bigint
+   `, e.SrcIP, e.ObservedAt.Add(-10*time.Minute), e.ObservedAt, collectorID).Scan(&users)
 			if err != nil {
 				writeErr(w, 503, "correlation query failed")
 				return
@@ -138,7 +180,11 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 				hit := defense.RuleHit{RuleID: "password_spray_v1", Title: "Possible password spraying", Severity: "medium",
 					Summary: "At least five distinct account names have recorded failed authentication events from one source IP in the preceding ten minutes; review identity logs before concluding."}
 				bucket := e.ObservedAt.Truncate(10 * time.Minute)
-				created, err := insertDefenseAlertAt(ctx, tx, id, e.SrcIP, bucket, hit, assetJSON)
+				key := e.SrcIP
+				if collector != nil {
+					key = fmt.Sprintf("collector:%d:%s", collector.ID, key)
+				}
+				created, err := insertDefenseAlertAt(ctx, tx, id, key, bucket, hit, assetJSON)
 				if err != nil {
 					writeErr(w, 503, "correlation alert failed")
 					return
@@ -151,7 +197,13 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		// Machine-speed fast path: deterministic corroboration and admission are
 		// recorded in the same transaction as the source event. Never call the
 		// firewall before the event + audit record commits.
-		actionID, autoErr := s.stageEmergencyAction(ctx, tx, e, id, time.Now())
+		// Collector credentials have no enforcement authority. Emergency admission
+		// remains isolated until an independently reviewed collector policy exists.
+		var actionID int64
+		var autoErr error
+		if collector == nil {
+			actionID, autoErr = s.stageEmergencyAction(ctx, tx, e, id, time.Now())
+		}
 		if autoErr != nil {
 			writeErr(w, 503, "emergency admission unavailable")
 			return

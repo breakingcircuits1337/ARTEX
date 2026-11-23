@@ -1,0 +1,70 @@
+name: secure-collectors
+
+on:
+  pull_request:
+    paths:
+      - "db/migrations/0020_defense_collectors.sql"
+      - "server/defense_collectors*.go"
+      - "server/defense_correlation*.go"
+      - "server/defense_telemetry.go"
+      - "server/auth.go"
+      - "scripts/defense_forwarder.py"
+      - "scripts/test_defense_forwarder.py"
+      - ".github/workflows/secure-collectors.yml"
+  push:
+    branches: [main]
+    paths:
+      - "db/migrations/0020_defense_collectors.sql"
+      - "server/defense_collectors*.go"
+      - "server/defense_correlation*.go"
+      - "server/defense_telemetry.go"
+      - "server/auth.go"
+      - "scripts/defense_forwarder.py"
+      - "scripts/test_defense_forwarder.py"
+      - ".github/workflows/secure-collectors.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  collector-go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: artex
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: artextest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Formatting
+        run: |
+          files=$(gofmt -l server/defense_collectors.go server/defense_collectors_test.go server/defense_telemetry.go server/defense_correlation.go server/defense_correlation_test.go)
+          if [ -n "$files" ]; then echo "gofmt required: $files"; exit 1; fi
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Collector identity / database / replay tests
+        run: go test -count=1 ./server -run 'TestCollector|TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit'
+      - name: Fresh migration test
+        run: go test -count=1 ./db -run 'TestOpenMigratesFreshDatabase'
+  collector-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/test_defense_forwarder.py

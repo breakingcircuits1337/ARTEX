@@ -336,6 +336,12 @@ func hostWithPort(host, scheme string) string {
 func (s *Server) requireAuth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
+		// Collector credentials are confined to ONE dedicated ingestion endpoint.
+		// A collector is not an admin and can never reach any other API path.
+		if p == "/api/defense/collector/events" && r.Method == http.MethodPost {
+			s.collectorAuth(w, r, h)
+			return
+		}
 		if strings.HasPrefix(p, "/api/auth/") || p == "/api/health" || p == "/api/ready" {
 			h.ServeHTTP(w, r)
 			return

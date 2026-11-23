@@ -71,6 +71,21 @@ func TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit(t *testing.T) {
 	peer := insertEvent("-peer", "suricata", "198.51.100.9", "192.0.2.4", "srv.example", now.Add(time.Minute))
 	_ = insertEvent("-different-dst", "suricata", "198.51.100.9", "192.0.2.77", "", now.Add(time.Minute))
 	_ = insertEvent("-different-sensor", "wazuh", "198.51.100.9", "192.0.2.4", "srv.example", now.Add(time.Minute))
+	// Same source vendor and endpoints do not imply the same physical sensor:
+	// a separate enrolled collector cannot corroborate a legacy/other collector.
+	var distinctCollectorID int64
+	if err := tx.QueryRowContext(ctx, `INSERT INTO defense_collectors(name,source,token_hash)
+		VALUES($1,'suricata',$2) RETURNING id`, prefix+"-collector",
+		strings.Repeat("f", 64)).Scan(&distinctCollectorID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO defense_events
+		(source,external_id,observed_at,kind,src_ip,dst_ip,host,signature,severity,collector_id)
+		VALUES('suricata',$1,$2,'network','198.51.100.9','192.0.2.4',
+		'srv.example','review-only',5,$3)`,
+		prefix+"-cross-collector", now.Add(time.Minute), distinctCollectorID); err != nil {
+		t.Fatal(err)
+	}
 	_ = insertEvent("-stale", "suricata", "198.51.100.9", "192.0.2.4", "srv.example", now.Add(2*time.Hour))
 	var alertID, caseID int64
 	err = tx.QueryRowContext(ctx, `
