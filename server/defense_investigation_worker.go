@@ -120,10 +120,18 @@ func (s *Server) investigatorTick() {
 	// Only exhausted abandoned leases can become failed. No duplicate run
 	// launches or infinite retry loops after repeated process crashes.
 	if _, err := s.m.pg.ExecContext(ctx, `
-		UPDATE defense_investigation_runs
-		   SET status='failed',last_error='Lease expired after maximum retries',
-		       completed_at=now(),lease_until=NULL
-		 WHERE status='running' AND attempts >= $1 AND lease_until < now()`, investigationMaxAttempts); err != nil {
+		WITH expired AS (
+		  UPDATE defense_investigation_runs
+		     SET status='failed',last_error='Lease expired after maximum retries',
+		         completed_at=now(),lease_until=NULL
+		   WHERE status='running' AND attempts >= $1 AND lease_until < now()
+		   RETURNING id,case_id
+		)
+		INSERT INTO defense_investigation_audit
+		  (run_id,case_id,event_type,actor,detail)
+		SELECT id,case_id,'failed','investigator',
+		       'Lease expired after maximum retries; no external actions performed'
+		FROM expired`, investigationMaxAttempts); err != nil {
 		log.Printf("[investigator] stale lease reconcile: %v", err)
 	}
 }
