@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Tag publication reruns this exact test matrix via workflow_call.
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   go:
@@ -159,6 +164,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: python3 -m unittest discover -s scripts -p 'test_release_qualification.py' -v
       - run: python3 scripts/posture_check_test.py
       - run: python3 scripts/test_defense_forwarder.py
       - run: python3 -m unittest discover -s scripts/benchmark -p 'test_*.py' -v

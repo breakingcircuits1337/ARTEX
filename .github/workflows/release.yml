@@ -6,12 +6,67 @@ on:
   # Release and the image push are gated on github.event_name == 'push'.
   workflow_dispatch:
 
+# A manual dry run uses a SemVer-shaped build ID but never publishes.
+env:
+  ARTEX_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || 'v0.0.0-ci' }}
+
 permissions:
-  contents: write # required to create the Release
+  contents: read
 
 jobs:
+  preflight:
+    name: release-preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify archive-qualification regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_release_qualification.py' -v
+      - name: Verify safe deployment defaults
+        run: bash scripts/test-defense-defaults.sh
+      - name: Enforce annotated SemVer tag on main
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          python3 scripts/release_qualification.py tag --tag "$ARTEX_RELEASE_TAG"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "::error::Release ref is not a tag"; exit 1
+          fi
+          if [[ "$(git cat-file -t "$GITHUB_REF")" != "tag" ]]; then
+            echo "::error::Release tag must be annotated"; exit 1
+          fi
+          if [[ "$(git rev-parse "$GITHUB_REF^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+            echo "::error::Checkout SHA does not match the release tag"; exit 1
+          fi
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::Release tag must refer to a commit reachable from main"; exit 1
+          fi
+      - name: Mark manual dispatch as non-publishing
+        if: github.event_name != 'push'
+        run: |
+          python3 scripts/release_qualification.py tag --tag "$ARTEX_RELEASE_TAG"
+          echo "Dry-run only: no GitHub Release or container image push"
+
+  # Repeat the full existing CI matrix and dependency gates against this exact
+  # tag. Publishing may not begin when either reusable workflow fails.
+  tests:
+    name: release-ci
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  security:
+    name: release-security
+    uses: ./.github/workflows/security-gates.yml
+    permissions:
+      contents: read
+
   # ① Frontend static export (once), reused by the cross-compiled platform builds
   frontend:
+    needs: [preflight, tests, security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +110,7 @@ jobs:
         env:
           ARTEX_TARGET_OS: ${{ matrix.goos }}
           ARTEX_TARGET_ARCH: ${{ matrix.goarch }}
-          ARTEX_BUILD_VERSION: ${{ github.ref_name }}
+          ARTEX_BUILD_VERSION: ${{ env.ARTEX_RELEASE_TAG }}
           ARTEX_SKIP_FRONTEND: "1"
           ARTEX_SKIP_NPM_CI: "1"
           # UPX self-extracting ELF binaries crash on some Linux kernels, virtualization
@@ -82,7 +137,7 @@ jobs:
 
   # ③ Collect all zips → create the GitHub Release
   release:
-    needs: binaries
+    needs: [preflight, tests, security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the Release (softprops/action-gh-release)
@@ -95,6 +150,8 @@ jobs:
           pattern: pkg-*
           merge-multiple: true
           path: dist
+      - name: Verify all release ZIPs before any publication
+        run: python3 scripts/release_qualification.py artifacts --tag "$ARTEX_RELEASE_TAG" --dir dist
       - name: Generate checksums
         working-directory: dist
         run: sha256sum *.zip > SHA256SUMS
@@ -112,7 +169,7 @@ jobs:
         env:
           SYFT: ${{ steps.syft.outputs.cmd }}
           SRC: ${{ runner.temp }}/sbom-src
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.ARTEX_RELEASE_TAG }}
         run: |
           mkdir -p "$SRC/web"
           cp go.mod go.sum "$SRC/"
@@ -122,6 +179,8 @@ jobs:
           grep -q '"pkg:golang/' "$sbom" || { echo "::error::SBOM has no pkg:golang entries"; exit 1; }
           grep -q '"pkg:npm/' "$sbom" || { echo "::error::SBOM has no pkg:npm entries"; exit 1; }
           echo "SBOM_PATH=$sbom" >> "$GITHUB_ENV"
+      - name: Verify checksums and CycloneDX inventory before signing
+        run: python3 scripts/release_qualification.py metadata --tag "$ARTEX_RELEASE_TAG" --dir dist
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*.zip
@@ -133,7 +192,7 @@ jobs:
             ${{ env.SBOM_PATH }}
       - name: Release body from CHANGELOG.md
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.ARTEX_RELEASE_TAG }}
         run: |
           version="${TAG#v}"
           if bash scripts/extract-changelog-section.sh "$version" CHANGELOG.md > "$RUNNER_TEMP/release-body.md"; then
@@ -157,7 +216,7 @@ jobs:
   #    DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets). Dry runs (workflow_dispatch)
   #    build both platforms without logging in or pushing.
   docker:
-    needs: binaries
+    needs: [preflight, tests, security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -188,7 +247,7 @@ jobs:
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !contains(env.ARTEX_RELEASE_TAG, '-') }}
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -196,7 +255,7 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ARTEX_VERSION=${{ github.ref_name }}
+          build-args: ARTEX_VERSION=${{ env.ARTEX_RELEASE_TAG }}
           provenance: true
           sbom: true
           cache-from: type=gha
@@ -209,7 +268,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           repo="${GITHUB_REPOSITORY,,}"
-          tag="${GITHUB_REF_NAME}"
+          tag="$ARTEX_RELEASE_TAG"
           cfg="$(mktemp -d)"
           for attempt in 1 2 3; do
             if DOCKER_CONFIG="$cfg" docker manifest inspect "ghcr.io/${repo}:${tag}" >/dev/null; then

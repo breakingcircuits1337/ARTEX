@@ -13,6 +13,20 @@ Please provide the exact fork commit SHA or image digest when reporting a proble
 Vulnerabilities that affect an upstream component should also be coordinated
 with its maintainers, without disclosing a fork vulnerability publicly.
 
+## Release qualification
+
+Pull requests and tagged releases now have blocking Go and Node dependency
+vulnerability gates, plus dedicated CodeQL analysis. Release publication is
+gated on the full tagged-SHA CI matrix, SemVer/tag ancestry validation, package
+checks, checksums, CycloneDX inventories and build attestations. See
+[Phase 18](docs/DEFENSE_PHASE18.md).
+
+These scans do **not** assess all third-party executables, Python packages
+or container OS layers; the principal server remains root-owned, and
+filesystem/operational gaps are documented below. Production deployment
+requires review of vulnerabilities, keys, network boundaries, backups,
+rollback and site safety; no automated green check certifies OT readiness.
+
 ## Reporting a Vulnerability
 
 **Do not disclose exploit details, credentials, logs containing sensitive data,
