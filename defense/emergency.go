@@ -1,13 +1,13 @@
 package defense
 
 import (
-	"errors"
 	"crypto/sha256"
 	"encoding/hex"
-	"sort"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -167,10 +167,14 @@ func (cfg EmergencyConfig) EligibleIP(source, destination string) bool {
 // simulation to live (or widening CIDRs, removing exemptions, etc.) silently
 // disarms until a console operator explicitly approves the new configuration.
 func (cfg EmergencyConfig) Fingerprint() string {
+	socket := strings.TrimSpace(os.Getenv("ARTEX_AUTO_CONTAIN_SOCKET"))
+	if socket == "" {
+		socket = "/run/artex/emergency.sock"
+	}
 	parts := []string{
 		string(cfg.Mode), cfg.TTL.String(),
 		strconv.Itoa(cfg.MaxActive), strconv.Itoa(cfg.MaxPerHour),
-		cfg.Freshness.String(),
+		cfg.Freshness.String(), "socket="+socket,
 	}
 	for _, value := range cfg.Protected {
 		parts = append(parts, "protected="+value.String())
@@ -181,7 +185,7 @@ func (cfg EmergencyConfig) Fingerprint() string {
 	for _, value := range cfg.AllowedSignatures {
 		parts = append(parts, "sig="+value)
 	}
-	sort.Strings(parts[5:])
+	sort.Strings(parts[6:])
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(sum[:])
 }
