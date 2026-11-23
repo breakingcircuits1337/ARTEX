@@ -51,6 +51,21 @@ type Manifest struct {
 	Quarantined []QuarantinedRule `json:"quarantined"`
 }
 
+// LookupRule recognizes exactly the curated manifest entries. It never
+// interprets a free-form rule name as an executable detection command.
+func LookupRule(engine, id string) (Rule, bool) {
+	m, err := Catalog()
+	if err != nil {
+		return Rule{}, false
+	}
+	for _, r := range m.Rules {
+		if r.Engine == engine && r.ID == id {
+			return r, true
+		}
+	}
+	return Rule{}, false
+}
+
 // Catalog parses the embedded manifest. No user-controlled paths, databases,
 // rule expressions, or remote endpoints are loaded by this package.
 func Catalog() (Manifest, error) {
