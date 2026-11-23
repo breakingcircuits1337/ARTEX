@@ -21,15 +21,23 @@ func (s *Server) defenseDetectionCatalog(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusServiceUnavailable, "detection pack unavailable")
 		return
 	}
+	sigmaCatalog, err := detectionpack.SigmaCatalog()
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, "Sigma rule catalog unavailable")
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"catalog":                catalog,
+		"sigma_catalog":          sigmaCatalog,
+		"sigma_compatibility":    "reviewed single-selection normalized-field subset only; no arbitrary Sigma conversion",
 		"installation":           "operator-managed sensors only",
 		"automatic_activation":   false,
 		"autonomous_containment": false,
 		"downloads": map[string]string{
 			"suricata": "/api/defense/detection-pack/suricata",
 			"yara":     "/api/defense/detection-pack/yara",
+			"sigma":    "/api/defense/detection-pack/sigma",
 		},
 	})
 }
@@ -51,6 +59,8 @@ func (s *Server) defenseDetectionDownload(w http.ResponseWriter, r *http.Request
 		filename = "artex-alert-only.rules"
 	case "yara":
 		filename = "artex-alert-only.yar"
+	case "sigma":
+		filename = "artex-normalized-sigma.yml"
 	default:
 		writeErr(w, http.StatusNotFound, "unknown detection engine")
 		return
