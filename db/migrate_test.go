@@ -133,16 +133,17 @@ func assertEmbeddedApplied(t *testing.T, d *DB) []appliedMigration {
 		}
 	}
 	applied := readApplied(t, d)
-	want := []struct {
-		version int
-		name    string
-	}{{1, llmRecordsMigration}, {2, llmUsageMigration}, {3, "0003_task_scope_icp_index.sql"}, {4, "0004_llm_usage_ts_index.sql"},
-		{5, "0005_traffic_rewrite_rules.sql"}, {6, "0006_activity_outbox.sql"}, {7, "0007_finding_report_state.sql"},
-		{8, "0008_traffic_evidence_rewrite_flag.sql"}, {9, "0009_llm_context.sql"}, {10, "0010_dashboard_usage_indexes.sql"},
-		{11, "0011_traffic_tamper_hooks.sql"}, {12, "0012_lesson_withdrawn.sql"},
-		{13, "0013_lesson_evidence_history.sql"}}
-	if len(applied) != len(want) {
-		t.Fatalf("schema_migrations = %+v, want versions 1 to 13", applied)
+	// Verify every currently embedded migration rather than freezing the
+	// expected list at the version that existed when this test was written.
+	// The loader checks filename/version constraints and sorts by version;
+	// comparing names and SHA-256 below still detects missing, reordered or
+	// modified migration records.
+	want, err := loadMigrations(migrationsFS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(want) < 13 || len(applied) != len(want) {
+		t.Fatalf("schema_migrations has %d rows, want %d embedded migrations: %+v", len(applied), len(want), applied)
 	}
 	for i, w := range want {
 		content, err := fs.ReadFile(migrationsFS(), w.name)
@@ -422,9 +423,27 @@ func TestMigrationsRefuseOutOfOrderVersion(t *testing.T) {
 // Open adds the column, keeps every row live, and a second Open is a no-op.
 func TestLessonWithdrawnMigrationKeepsExistingEvidence(t *testing.T) {
 	dsn := scratchDSN(t, "lesson_withdrawn")
-	d, err := Open(dsn)
+	// Construct an actual pre-0012 migration history. Creating the newest
+	// schema and deleting rows 12/13 is invalid once later migrations exist:
+	// newer 0014+ records would remain and correctly refuse out-of-order 0012.
+	pre0012 := fstest.MapFS{}
+	entries, err := fs.ReadDir(migrationsFS(), ".")
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() >= "0012_" {
+			continue
+		}
+		content, readErr := fs.ReadFile(migrationsFS(), entry.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		pre0012[entry.Name()] = &fstest.MapFile{Data: content}
+	}
+	d, err := openWithMigrations(dsn, pre0012)
+	if err != nil {
+		t.Fatalf("Open with pre-0012 migrations: %v", err)
 	}
 	const migrationName = "0012_lesson_withdrawn.sql"
 	migrationSQL, err := fs.ReadFile(migrationsFS(), migrationName)

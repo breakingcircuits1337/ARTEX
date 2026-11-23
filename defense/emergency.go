@@ -25,14 +25,14 @@ const (
 // EmergencyConfig is operator-supplied, bounded and fail-closed. An empty
 // destination scope cannot be interpreted as "all networks".
 type EmergencyConfig struct {
-	Mode           EmergencyMode
-	Protected      []netip.Prefix
-	Exempt         []netip.Prefix
-	TTL            time.Duration
-	MaxActive      int
-	MaxPerHour     int
-	Freshness      time.Duration
-	AllowedSignatures []string
+	Mode                     EmergencyMode
+	Protected                []netip.Prefix
+	Exempt                   []netip.Prefix
+	TTL                      time.Duration
+	MaxActive                int
+	MaxPerHour               int
+	Freshness                time.Duration
+	AllowedSignatures        []string
 	AllowPrivateDestinations bool
 }
 
@@ -185,7 +185,7 @@ func (cfg EmergencyConfig) Fingerprint() string {
 	parts := []string{
 		string(cfg.Mode), cfg.TTL.String(),
 		strconv.Itoa(cfg.MaxActive), strconv.Itoa(cfg.MaxPerHour),
-		cfg.Freshness.String(), "socket="+socket,
+		cfg.Freshness.String(), "socket=" + socket,
 		fmt.Sprintf("private-destinations=%t", cfg.AllowPrivateDestinations),
 	}
 	for _, value := range cfg.Protected {

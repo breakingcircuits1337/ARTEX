@@ -158,6 +158,6 @@ func (s *Server) emergencyRevertAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, map[string]any{
 		"paused": true, "reverted": reversed, "failed": failed,
 		"remaining": remaining,
-		"warning": "Any failed or remaining action requires operator verification on the dedicated kernel set",
+		"warning":   "Any failed or remaining action requires operator verification on the dedicated kernel set",
 	})
 }

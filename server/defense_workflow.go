@@ -282,7 +282,7 @@ func (s *Server) proposeDefenseResponse(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var input struct {
-		Playbook     string `json:"playbook"`
+		Playbook      string `json:"playbook"`
 		Justification string `json:"justification"`
 	}
 	if !decodeDefenseWorkflow(w, r, &input) {
@@ -608,4 +608,3 @@ func (s *Server) listDefenseCaseAudit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{"case_id": id, "audit": trail})
 }
-

@@ -26,6 +26,9 @@ var noTargetTools = toolSet(
 	"get_worker_output", "get_worker_trace", "search_all_worker_traces",
 	"add_hint", "add_intent", "steer_work", "kill_work",
 	"set_goals", "set_constraints", "list_goals", "prove_goal", "goal_met",
+	// assess_exposure only evaluates already-stored asset metadata; it makes
+	// no outbound network connection and cannot declare a dial target.
+	"assess_exposure",
 	"insert_assets", "add_company_scope", "add_task_scope", "list_assets",
 	"list_untested_assets", "list_companies", "report_finding", "record_fact",
 	"save_task_credential", "list_task_credentials", "ingest_bbot", "ingest_scan_output", "record_coverage",

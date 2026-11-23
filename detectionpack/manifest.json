@@ -1,0 +1,191 @@
+{
+  "name": "ARTEX Defender Detection Pack",
+  "version": "0.1.0",
+  "source_archive": "artex-defender-github-ready.zip",
+  "source_license": "MIT - Copyright (c) 2026 Breaking Circuits",
+  "policy": "alert_only",
+  "default_deployed": false,
+  "execution_enabled": false,
+  "autonomous_containment_enabled": false,
+  "rule_count": 10,
+  "quarantined_count": 15,
+  "rules": [
+    {
+      "engine": "suricata",
+      "id": "9900001",
+      "name": "ARTEX Enrich User-Agent",
+      "severity": "medium",
+      "false_positive_risk": "medium",
+      "limitations": "A legitimate researcher or authorized ARTEX instance may use this UA.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900006",
+      "name": "ARTEX Console Port Exposure",
+      "severity": "medium",
+      "false_positive_risk": "high",
+      "limitations": "Any legitimate service on port 8787 can match. Does not prove ARTEX or external reachability.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900011",
+      "name": "Repeated .env Path Requests",
+      "severity": "medium",
+      "false_positive_risk": "medium",
+      "limitations": "Monitoring tools or legitimate development probes may request this path.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900012",
+      "name": "artex-probe URI",
+      "severity": "medium",
+      "false_positive_risk": "medium",
+      "limitations": "Source marker is trivially spoofable and may appear in legitimate testing.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900020",
+      "name": "CyberStrikeAI User-Agent",
+      "severity": "medium",
+      "false_positive_risk": "medium",
+      "limitations": "A user-agent string can be spoofed or used in authorized assessments.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900021",
+      "name": "PentAGI User-Agent",
+      "severity": "medium",
+      "false_positive_risk": "medium",
+      "limitations": "A user-agent string can be spoofed or used in authorized assessments.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "suricata",
+      "id": "9900030",
+      "name": "ARTEX Proxy Port Exposure",
+      "severity": "medium",
+      "false_positive_risk": "high",
+      "limitations": "Any service on port 8788 can match; verify service ownership.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_Binary_Strings",
+      "name": "ARTEX-Related ELF Strings",
+      "severity": "medium",
+      "false_positive_risk": "high",
+      "limitations": "Can identify legitimate authorized ARTEX binaries; not malware proof.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_JSP_Webshell_Numbered",
+      "name": "Suspicious JSP Command Execution",
+      "severity": "high",
+      "false_positive_risk": "medium",
+      "limitations": "Generic JSP command-execution heuristics can find legitimate tools; review file context.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_Probe_File",
+      "name": "artex-probe Artifact",
+      "severity": "low",
+      "false_positive_risk": "high",
+      "limitations": "Source marker may exist in benign logs/docs and test fixtures.",
+      "operator_install_required": true,
+      "auto_containment_eligible": false
+    }
+  ],
+  "quarantined": [
+    {
+      "engine": "suricata",
+      "id": "9900002",
+      "reason": "Generic norma SDK user-agent; not ARTEX-specific."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900003",
+      "reason": "Historical infrastructure IP list; ownership/assignment can change."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900004",
+      "reason": "Historical infrastructure IP list; ownership/assignment can change."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900005",
+      "reason": "Arbitrary outbound TCP port 8787 too broad."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900007",
+      "reason": "webhook.site DNS lookups can be legitimate."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900008",
+      "reason": "webhook.site HTTP callbacks can be legitimate."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900009",
+      "reason": "Reseller domain lookup is not compromise evidence."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900010",
+      "reason": "50 HTTP GETs/10s can be normal and/or authorized testing."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900013",
+      "reason": "Nearly duplicate artex-probe URI indicator."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900040",
+      "reason": "Normal outbound Anthropic API usage; not a threat indicator."
+    },
+    {
+      "engine": "suricata",
+      "id": "9900041",
+      "reason": "Normal outbound OpenAI API usage; not a threat indicator."
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_Config_File",
+      "reason": "Configuration patterns may match benign products."
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_EVE_Log_Artifact",
+      "reason": "Alert data can match when scanned; high self-match risk."
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_Go_Module_Cache",
+      "reason": "Authorized source/build caches are not incidents."
+    },
+    {
+      "engine": "yara",
+      "id": "ARTEX_Docker_Compose",
+      "reason": "Legitimate deployments contain common Compose keys."
+    }
+  ]
+}

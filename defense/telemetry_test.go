@@ -1,54 +1,125 @@
 package defense
 
 import (
- "encoding/json"
- "strings"
- "testing"
- "time"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
 )
 
-func TestNormalizeSuricataAndDedupKey(t *testing.T){
- now:=time.Date(2026,11,23,12,0,0,0,time.UTC)
- raw:=json.RawMessage(`{"timestamp":"2026-11-23T11:59:00Z","event_type":"alert","src_ip":"10.0.0.1","dest_ip":"10.0.0.2","alert":{"signature":"Suspicious DNS","severity":1}}`)
- e,err:=NormalizeEvent("suricata",raw,now)
- if err!=nil {t.Fatal(err)}
- if e.Kind!="network"||!e.VendorAlert||e.Severity!=9||e.Signature!="Suspicious DNS"||!strings.HasPrefix(e.ExternalID,"sha256:"){t.Fatalf("bad event %+v",e)}
- if hits:=EvaluateEvent(e);len(hits)!=1||hits[0].Severity!="high"{t.Fatalf("bad hits %+v",hits)}
- e2,err:=NormalizeEvent("suricata",raw,now);if err!=nil||e.ExternalID!=e2.ExternalID{t.Fatal("idempotency mismatch")}
+func TestNormalizeSuricataAndDedupKey(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	raw := json.RawMessage(`{"timestamp":"2026-11-23T11:59:00Z","event_type":"alert","src_ip":"10.0.0.1","dest_ip":"10.0.0.2","alert":{"signature":"Suspicious DNS","severity":1}}`)
+	e, err := NormalizeEvent("suricata", raw, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Kind != "network" || !e.VendorAlert || e.Severity != 9 || e.Signature != "Suspicious DNS" || !strings.HasPrefix(e.ExternalID, "sha256:") {
+		t.Fatalf("bad event %+v", e)
+	}
+	if hits := EvaluateEvent(e); len(hits) != 1 || hits[0].Severity != "high" {
+		t.Fatalf("bad hits %+v", hits)
+	}
+	e2, err := NormalizeEvent("suricata", raw, now)
+	if err != nil || e.ExternalID != e2.ExternalID {
+		t.Fatal("idempotency mismatch")
+	}
 }
 
-func TestNormalizeWazuhAndGeneric(t *testing.T){
- now:=time.Now()
- a,err:=NormalizeEvent("wazuh",json.RawMessage(`{"id":"abc-1","rule":{"level":12,"description":"Suspicious login","groups":["authentication_failed"]},"agent":{"name":"host.local"},"data":{"srcip":"192.0.2.10","srcuser":"operator"},"timestamp":"2026-11-22T12:00:00Z"}`),now)
- if err!=nil||!a.VendorAlert||a.Kind!="authentication"||a.Outcome!="failure"||a.Host!="host.local"{t.Fatalf("%+v err=%v",a,err)}
- b,err:=NormalizeEvent("generic",json.RawMessage(`{"event_id":"evt-7","kind":"authentication","outcome":"failure","src_ip":"192.0.2.11","username":"someone"}`),now)
- if err!=nil||b.Outcome!="failure"||len(EvaluateEvent(b))!=0{t.Fatalf("%+v err=%v",b,err)}
+func TestNormalizeWazuhAndGeneric(t *testing.T) {
+	now := time.Now()
+	a, err := NormalizeEvent("wazuh", json.RawMessage(`{"id":"abc-1","rule":{"level":12,"description":"Suspicious login","groups":["authentication_failed"]},"agent":{"name":"host.local"},"data":{"srcip":"192.0.2.10","srcuser":"operator"},"timestamp":"2026-11-22T12:00:00Z"}`), now)
+	if err != nil || !a.VendorAlert || a.Kind != "authentication" || a.Outcome != "failure" || a.Host != "host.local" {
+		t.Fatalf("%+v err=%v", a, err)
+	}
+	b, err := NormalizeEvent("generic", json.RawMessage(`{"event_id":"evt-7","kind":"authentication","outcome":"failure","src_ip":"192.0.2.11","username":"someone"}`), now)
+	if err != nil || b.Outcome != "failure" || len(EvaluateEvent(b)) != 0 {
+		t.Fatalf("%+v err=%v", b, err)
+	}
 }
 
 func TestCommonSensorTimezoneFormats(t *testing.T) {
- now:=time.Date(2026,11,23,18,0,0,0,time.UTC)
- for _,value:=range []string{
-  "2026-11-23T12:00:00.550047+0000",
-  "2026-11-23T08:00:00.550047-0400",
-  "2026-11-23T12:00:00.550047Z",
- } {
-  raw,_:=json.Marshal(map[string]any{"kind":"network","timestamp":value})
-  e,err:=NormalizeEvent("generic",raw,now)
-  if err!=nil {t.Errorf("%s: %v",value,err);continue}
-  if e.ObservedAt.IsZero() {t.Errorf("%s parsed zero timestamp",value)}
- }
+	now := time.Date(2026, 11, 23, 18, 0, 0, 0, time.UTC)
+	for _, value := range []string{
+		"2026-11-23T12:00:00.550047+0000",
+		"2026-11-23T08:00:00.550047-0400",
+		"2026-11-23T12:00:00.550047Z",
+	} {
+		raw, _ := json.Marshal(map[string]any{"kind": "network", "timestamp": value})
+		e, err := NormalizeEvent("generic", raw, now)
+		if err != nil {
+			t.Errorf("%s: %v", value, err)
+			continue
+		}
+		if e.ObservedAt.IsZero() {
+			t.Errorf("%s parsed zero timestamp", value)
+		}
+	}
+}
+
+func TestCuratedSuricataCannotAuthorizeEmergencyContainment(t *testing.T) {
+	now := time.Now().UTC()
+	raw := json.RawMessage(`{"timestamp":"2026-11-23T12:00:00Z","event_type":"alert","src_ip":"1.1.1.1","dest_ip":"192.0.2.10","alert":{"signature_id":9900001,"signature":"ARTEX-DEFENDER ARTEX Enrich User-Agent Detected","severity":1}}`)
+	e, err := NormalizeEvent("suricata", raw, now.Add(24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.CuratedRuleID != "9900001" || e.VendorAlert {
+		t.Fatalf("curated SID must not authorize blocking: %+v", e)
+	}
+	hits := EvaluateEvent(e)
+	if len(hits) != 1 || hits[0].RuleID != "curated_suricata_9900001" ||
+		hits[0].Severity != "medium" {
+		t.Fatalf("curated match did not produce alert-only detection: %+v", hits)
+	}
+	other, err := NormalizeEvent("suricata", json.RawMessage(`{"event_type":"alert","alert":{"signature_id":1234,"signature":"Unknown upstream critical alert","severity":1}}`), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !other.VendorAlert || other.CuratedRuleID != "" {
+		t.Fatalf("unknown external sensor rule behavior changed: %+v", other)
+	}
+}
+
+func TestCuratedYARAObservationIsAlertOnly(t *testing.T) {
+	now := time.Now().UTC()
+	e, err := NormalizeEvent("generic", json.RawMessage(`{"event_id":"yara-1","kind":"endpoint","host":"test-asset","signature":"ARTEX_JSP_Webshell_Numbered"}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := EvaluateEvent(e)
+	if len(hits) != 1 || hits[0].RuleID != "curated_yara_ARTEX_JSP_Webshell_Numbered" ||
+		hits[0].Severity != "high" {
+		t.Fatalf("unexpected YARA observation: %+v", hits)
+	}
+	if e.VendorAlert {
+		t.Fatal("YARA report must not impersonate an upstream blocking signal")
+	}
+	e.Signature = "unknown_user_defined_rule"
+	if len(EvaluateEvent(e)) != 0 {
+		t.Fatal("unknown YARA name should not generate a curated alert")
+	}
+	e.Source = "suricata"
+	e.Signature = "ARTEX_JSP_Webshell_Numbered"
+	if len(EvaluateEvent(e)) != 0 {
+		t.Fatal("source spoofing should not generate YARA rule match")
+	}
 }
 
 func TestNormalizeRejectsInvalidInput(t *testing.T) {
- now:=time.Now()
- for _,raw:=range []string{
-  `{"kind":"other","src_ip":"not-an-ip"}`,
-  `{"kind":"other","timestamp":"nonsense"}`,
-  `{"kind":"other","signature":"`+strings.Repeat("a",513)+`"}`,
-  `{"kind":"unknown"}`,
-  `[]`,
- } {
-  if _,err:=NormalizeEvent("generic",json.RawMessage(raw),now);err==nil {t.Errorf("accepted invalid %s",raw)}
- }
- if _,err:=NormalizeEvent("other",json.RawMessage(`{"kind":"other"}`),now);err==nil{t.Fatal("accepted unknown source")}
+	now := time.Now()
+	for _, raw := range []string{
+		`{"kind":"other","src_ip":"not-an-ip"}`,
+		`{"kind":"other","timestamp":"nonsense"}`,
+		`{"kind":"other","signature":"` + strings.Repeat("a", 513) + `"}`,
+		`{"kind":"unknown"}`,
+		`[]`,
+	} {
+		if _, err := NormalizeEvent("generic", json.RawMessage(raw), now); err == nil {
+			t.Errorf("accepted invalid %s", raw)
+		}
+	}
+	if _, err := NormalizeEvent("other", json.RawMessage(`{"kind":"other"}`), now); err == nil {
+		t.Fatal("accepted unknown source")
+	}
 }

@@ -777,6 +777,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
 	mux.HandleFunc("GET /api/defense/alerts", s.listDefenseAlerts)
 	mux.HandleFunc("GET /api/defense/summary", s.defenseSummary)
+	// Curated alert-only detector metadata and manual rule-file export.
+	mux.HandleFunc("GET /api/defense/detection-pack", s.defenseDetectionCatalog)
+	mux.HandleFunc("GET /api/defense/detection-pack/{engine}", s.defenseDetectionDownload)
 	// Phase 3: human-authorized incident triage and manual-only response review.
 	// Existing /api/* JWT and cookie-origin guards wrap every route.
 	mux.HandleFunc("GET /api/defense/cases", s.listDefenseCases)

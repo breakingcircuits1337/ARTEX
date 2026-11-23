@@ -1,0 +1,50 @@
+name: detection-pack
+
+on:
+  pull_request:
+    paths:
+      - "detectionpack/**"
+      - "scripts/validate-detection-pack.sh"
+      - ".github/workflows/detection-pack.yml"
+      - "server/defense_detection_pack*.go"
+      - "server/server.go"
+      - "web/src/app/(main)/function/defense/page.tsx"
+  push:
+    branches: [main]
+    paths:
+      - "detectionpack/**"
+      - "scripts/validate-detection-pack.sh"
+      - ".github/workflows/detection-pack.yml"
+
+jobs:
+  native-rule-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install standalone rule compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends suricata yara
+      - name: Compile and validate source-derived detection rules
+        run: bash scripts/validate-detection-pack.sh
+  catalog-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test the catalog without activating a sensor
+        run: go test ./detectionpack
+
+  full-go-compilation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Compile all ARTEX packages without relaxing formatting checks
+        run: go build ./...
+      - name: Run defense and catalog unit tests
+        run: go test ./detectionpack ./defense
