@@ -96,6 +96,7 @@ func TestEmergencyRequiresAuthAndDefenseMode(t *testing.T) {
 func TestEmergencyAdmissionPG(t *testing.T) {
 	t.Setenv("ARTEX_MODE", "defense")
 	t.Setenv("ARTEX_AUTO_CONTAIN_MODE", "simulate")
+	t.Setenv("ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES", "Critical sensor signature")
 	t.Setenv("ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS", "192.0.2.0/24")
 	m, err := NewManager(t.TempDir(), "")
 	if err != nil {
