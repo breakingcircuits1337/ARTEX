@@ -10,6 +10,7 @@ func armedEmergencyTest(t *testing.T) EmergencyConfig {
 	t.Setenv("ARTEX_MODE", "defense")
 	t.Setenv("ARTEX_AUTO_CONTAIN_MODE", "simulate")
 	t.Setenv("ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS", "192.0.2.0/24,10.4.0.0/16")
+	t.Setenv("ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES", "critical payload")
 	cfg, err := LoadEmergencyConfig()
 	if err != nil {
 		t.Fatal(err)
