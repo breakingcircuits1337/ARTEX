@@ -55,7 +55,7 @@ func TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	prefix := fmt.Sprintf("phase6-correlation-%d", now.UnixNano())
 	var companyID int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO companies(name,nkey) VALUES($1,$1) RETURNING id`,prefix).Scan(&companyID); err != nil {
+	if err := tx.QueryRowContext(ctx, `INSERT INTO companies(name,nkey) VALUES($1,$1) RETURNING id`, prefix).Scan(&companyID); err != nil {
 		t.Fatal(err)
 	}
 	insertEvent := func(name, source, src, dst, host string, when time.Time) int64 {
