@@ -102,7 +102,7 @@ func (s *Server) emergencyRevertAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	if err := updateEmergencyControl(ctx, pg, true); err != nil {
+	if err := updateEmergencyControl(ctx, pg, true, ""); err != nil {
 		cancel()
 		writeErr(w, 503, "emergency stop could not pause new actions")
 		return
