@@ -76,7 +76,7 @@ func TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit(t *testing.T) {
 	var distinctCollectorID int64
 	if err := tx.QueryRowContext(ctx, `INSERT INTO defense_collectors(name,source,token_hash)
 		VALUES($1,'suricata',$2) RETURNING id`, prefix+"-collector",
-		strings.Repeat("f",64)).Scan(&distinctCollectorID); err != nil {
+		strings.Repeat("f", 64)).Scan(&distinctCollectorID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO defense_events

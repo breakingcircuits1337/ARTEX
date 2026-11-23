@@ -19,17 +19,17 @@ const (
 )
 
 type correlatedEvent struct {
-	ID         int64
-	Source     string
+	ID          int64
+	Source      string
 	CollectorID sql.NullInt64
-	Kind       string
-	SrcIP      string
-	DstIP      string
-	Host       string
-	Signature  string
-	ObservedAt time.Time
-	Reason     string
-	Confidence int
+	Kind        string
+	SrcIP       string
+	DstIP       string
+	Host        string
+	Signature   string
+	ObservedAt  time.Time
+	Reason      string
+	Confidence  int
 }
 
 type correlationCounts struct {

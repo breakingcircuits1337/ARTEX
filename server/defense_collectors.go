@@ -116,7 +116,6 @@ func (s *Server) authenticateCollector(ctx context.Context, header string) (*col
 	return &collectorIdentity{ID: id, Source: source, TokenHash: got}, nil
 }
 
-
 // Hold a row SHARE lock throughout ingestion so a concurrent token rotation
 // or revocation cannot race an already-authenticated in-flight batch.
 // Requests authenticated *before* a rotation but starting the transaction

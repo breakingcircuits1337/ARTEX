@@ -150,8 +150,13 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	if second.Code != http.StatusCreated {
 		t.Fatalf("second collector status=%d body=%s", second.Code, second.Body.String())
 	}
-	var c2 struct { ID int64 `json:"id"`; Token string `json:"token"` }
-	if err := json.Unmarshal(second.Body.Bytes(), &c2); err != nil { t.Fatal(err) }
+	var c2 struct {
+		ID    int64  `json:"id"`
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(second.Body.Bytes(), &c2); err != nil {
+		t.Fatal(err)
+	}
 	if response := feed(c2.Token, batch); response.Code != 200 {
 		t.Fatalf("same external ID from another sensor rejected: %d", response.Code)
 	}
@@ -160,7 +165,9 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 		t.Fatalf("per-collector provenance failed count=%d error=%v", count, err)
 	}
 	identity, err := s.authenticateCollector(context.Background(), "Collector "+c.Token)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	rotate := invoke(fmt.Sprintf("/api/defense/collectors/%d/rotate", c.ID), "Bearer "+admin, "", c.ID)
 	if rotate.Code != 200 {
 		t.Fatalf("rotate status=%d body=%s", rotate.Code, rotate.Body.String())
@@ -175,7 +182,9 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 		t.Fatal("rotation did not replace secret")
 	}
 	tx, err := m.pg.BeginTx(context.Background(), nil)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	valid, err := validateCollectorTransaction(context.Background(), tx, identity)
 	_ = tx.Rollback()
 	if err != nil || valid {
