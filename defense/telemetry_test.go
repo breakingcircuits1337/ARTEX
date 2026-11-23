@@ -39,6 +39,30 @@ func TestCommonSensorTimezoneFormats(t *testing.T) {
  }
 }
 
+func TestCuratedSuricataCannotAuthorizeEmergencyContainment(t *testing.T) {
+	now := time.Now().UTC()
+	raw := json.RawMessage(`{"timestamp":"2026-11-23T12:00:00Z","event_type":"alert","src_ip":"1.1.1.1","dest_ip":"192.0.2.10","alert":{"signature_id":9900001,"signature":"ARTEX-DEFENDER ARTEX Enrich User-Agent Detected","severity":1}}`)
+	e, err := NormalizeEvent("suricata", raw, now.Add(24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.CuratedRuleID != "9900001" || e.VendorAlert {
+		t.Fatalf("curated SID must not authorize blocking: %+v", e)
+	}
+	hits := EvaluateEvent(e)
+	if len(hits) != 1 || hits[0].RuleID != "curated_suricata_9900001" ||
+		hits[0].Severity != "medium" {
+		t.Fatalf("curated match did not produce alert-only detection: %+v", hits)
+	}
+	other, err := NormalizeEvent("suricata", json.RawMessage(`{"event_type":"alert","alert":{"signature_id":1234,"signature":"Unknown upstream critical alert","severity":1}}`), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !other.VendorAlert || other.CuratedRuleID != "" {
+		t.Fatalf("unknown external sensor rule behavior changed: %+v", other)
+	}
+}
+
 func TestCuratedYARAObservationIsAlertOnly(t *testing.T) {
 	now := time.Now().UTC()
 	e, err := NormalizeEvent("generic", json.RawMessage(`{"event_id":"yara-1","kind":"endpoint","host":"test-asset","signature":"ARTEX_JSP_Webshell_Numbered"}`), now)
