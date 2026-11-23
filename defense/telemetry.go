@@ -321,20 +321,22 @@ func EvaluateEvent(e SecurityEvent) []RuleHit {
 // content returns an error so callers can roll back the ingestion transaction;
 // no alert is silently mislabeled or given response authority.
 func EvaluateEventWithSigma(e SecurityEvent) ([]RuleHit, error) {
-    hits := EvaluateEvent(e)
-    matches, err := detectionpack.SigmaMatch(map[string]string{
-        "source":e.Source, "kind":e.Kind, "outcome":e.Outcome,
-        "action":e.Action,"signature":e.Signature,"host":e.Host,
-        "username":e.Username,"src_ip":e.SrcIP,"dst_ip":e.DstIP,
-    })
-    if err != nil {return nil,err}
-    for _,m := range matches {
-        hits=append(hits, RuleHit{
-            RuleID:"sigma_"+m.ID,
-            Title:m.Title,
-            Severity:m.Severity,
-            Summary:"Reviewed normalized-event heuristic (alert-only): "+m.Limitations+" Verify independent source evidence.",
-        })
-    }
-    return hits,nil
+	hits := EvaluateEvent(e)
+	matches, err := detectionpack.SigmaMatch(map[string]string{
+		"source": e.Source, "kind": e.Kind, "outcome": e.Outcome,
+		"action": e.Action, "signature": e.Signature, "host": e.Host,
+		"username": e.Username, "src_ip": e.SrcIP, "dst_ip": e.DstIP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range matches {
+		hits = append(hits, RuleHit{
+			RuleID:   "sigma_" + m.ID,
+			Title:    m.Title,
+			Severity: m.Severity,
+			Summary:  "Reviewed normalized-event heuristic (alert-only): " + m.Limitations + " Verify independent source evidence.",
+		})
+	}
+	return hits, nil
 }

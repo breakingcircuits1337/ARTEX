@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-    "github.com/Autumn-27/artex/detectionpack"
+	"github.com/Autumn-27/artex/detectionpack"
 )
 
 // ObservedIndicator is a bounded, normalized observation from an existing
@@ -91,8 +91,8 @@ func KnownRuleATTACKHint(ruleID string) (technique, tactic string, ok bool) {
 	if ruleID == "password_spray_v1" {
 		return "T1110.003", "TA0006", true // Password Spraying / Credential Access
 	}
-    if ruleID == "auth_guess_burst_v1" {
-        return "T1110.001", "TA0006", true // Password Guessing / Credential Access
-    }
-    return detectionpack.SigmaATTACKHint(ruleID)
+	if ruleID == "auth_guess_burst_v1" {
+		return "T1110.001", "TA0006", true // Password Guessing / Credential Access
+	}
+	return detectionpack.SigmaATTACKHint(ruleID)
 }
