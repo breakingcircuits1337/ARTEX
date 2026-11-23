@@ -1,0 +1,20 @@
+name: pr13-format-review
+on:
+  push:
+    branches: [feat/pr13-production-observability]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render formatting of changed Go sources
+        run: |
+          for f in server/defense_observability.go server/defense_observability_test.go server/server.go server/defense_telemetry.go; do
+            cp "$f" /tmp/pr13-original.go
+            gofmt -w "$f"
+            if ! cmp -s /tmp/pr13-original.go "$f"; then
+              printf 'ARTEX13_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
+            fi
+          done
