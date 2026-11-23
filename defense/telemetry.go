@@ -79,7 +79,19 @@ func classify(m map[string]any, source string) string {
 }
 func status(m map[string]any, source string) string {
  v:=strings.ToLower(first(field(m,"outcome"),field(m,"status"),field(m,"data","status")))
- switch v {case "failed","failure","denied","error","blocked":return "failure";case "success","succeeded","allowed","ok":return "success";case "","unknown":return "";default:return "unknown"}
+ switch v {case "failed","failure","denied","error","blocked":return "failure";case "success","succeeded","allowed","ok":return "success";case "unknown":return "unknown"}
+ if source=="wazuh" {
+  if rule,ok:=m["rule"].(map[string]any);ok {
+   if groups,ok:=rule["groups"].([]any);ok {
+    for _,group:=range groups {
+     if group=="authentication_failed" {return "failure"}
+     if group=="authentication_success" {return "success"}
+    }
+   }
+  }
+ }
+ if v=="" {return ""}
+ return "unknown"
 }
 
 // NormalizeEvent accepts a Suricata EVE, Wazuh alert, generic normalized event,
