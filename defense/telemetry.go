@@ -112,8 +112,14 @@ func NormalizeEvent(source string, raw json.RawMessage, now time.Time) (Security
  }
  ts:=first(field(m,"timestamp"),field(m,"time"),field(m,"time_dt"))
  if ts=="" {e.ObservedAt=now.UTC()} else {
-  t,err:=time.Parse(time.RFC3339Nano,ts)
-  if err!=nil {return e,errors.New("timestamp must be RFC3339")}
+  var t time.Time
+  var err error
+  // Suricata EVE and Wazuh often emit +/-HHMM offsets instead of RFC3339
+  // +/-HH:MM. Accept both without silently substituting ingest time.
+  for _,layout:=range []string{time.RFC3339Nano,"2006-01-02T15:04:05.999999999-0700","2006-01-02T15:04:05-0700"} {
+   if t,err=time.Parse(layout,ts);err==nil {break}
+  }
+  if err!=nil {return e,errors.New("timestamp must include a valid timezone")}
   if t.After(now.Add(24*time.Hour)) {return e,errors.New("timestamp too far in the future")}
   e.ObservedAt=t.UTC()
  }
