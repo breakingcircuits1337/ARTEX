@@ -772,6 +772,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
 	mux.HandleFunc("GET /api/defense/alerts", s.listDefenseAlerts)
 	mux.HandleFunc("GET /api/defense/summary", s.defenseSummary)
+	// Phase 3: human-authorized incident triage and manual-only response review.
+	// Existing /api/* JWT and cookie-origin guards wrap every route.
+	mux.HandleFunc("GET /api/defense/cases", s.listDefenseCases)
+	mux.HandleFunc("POST /api/defense/cases", s.createDefenseCase)
+	mux.HandleFunc("POST /api/defense/cases/{id}/triage", s.triageDefenseCase)
+	mux.HandleFunc("GET /api/defense/cases/{id}/audit", s.listDefenseCaseAudit)
+	mux.HandleFunc("GET /api/defense/cases/{id}/graph", s.defenseCaseGraph)
+	mux.HandleFunc("POST /api/defense/cases/{id}/responses", s.proposeDefenseResponse)
+	mux.HandleFunc("GET /api/defense/responses", s.listDefenseResponses)
+	mux.HandleFunc("POST /api/defense/responses/{id}/decision", s.decideDefenseResponse)
+	mux.HandleFunc("POST /api/defense/responses/{id}/simulate", s.simulateDefenseResponse)
+	mux.HandleFunc("GET /api/defense/playbooks", s.listDefensePlaybooks)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/logs", s.getLogs)
 	mux.HandleFunc("GET /api/logs/history", s.getLogsHistory)
