@@ -29,7 +29,6 @@ export function useSOCLive(onRevision: () => void): StreamState {
     let generation = 0;
     let controller: AbortController | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
-    let initialWatchdog: ReturnType<typeof setTimeout> | undefined;
     const decoder = new TextDecoder();
 
     const fallback = window.setInterval(() => {
@@ -43,7 +42,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
       controller = connection;
       setState("connecting");
       let ready = false;
-      initialWatchdog = window.setTimeout(() => connection.abort(), 10000);
+      const initialWatchdog = window.setTimeout(() => connection.abort(), 10000);
       try {
         const token = window.localStorage.getItem("artex_token");
         const response = await fetch(socStreamURL(), {
@@ -90,7 +89,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
                   active = true;
                   failures = 0;
                   setState("live");
-                  if (initialWatchdog) window.clearTimeout(initialWatchdog);
+                  window.clearTimeout(initialWatchdog);
                 }
               }
               if (eventName === "unavailable") throw new Error("SOC database temporarily unavailable");
@@ -110,8 +109,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
         // server restart, and interrupted network connections.
       } finally {
         if (myGeneration === generation) active = false;
-        if (initialWatchdog) window.clearTimeout(initialWatchdog);
-        if (controller === connection) controller = null;
+          if (controller === connection) controller = null;
         connection.abort();
       }
       if (!stopped && !document.hidden && myGeneration === generation) {
