@@ -401,7 +401,7 @@ func (s *Server) reviewDefenseFinding(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 503, "finding review failed")
 		return
 	}
-	detail := fmt.Sprintf("Reviewed finding #%d as %s: %s", findingID, input.Verdict, reason)
+	detail := fmt.Sprintf("Reviewed finding #%d as %s; review #%d contains rationale", findingID, input.Verdict, reviewID)
 	if err := appendInvestigationAudit(ctx, tx, runID, caseID, "reviewed", "console-admin", detail); err != nil {
 		writeErr(w, 503, "finding audit failed")
 		return
