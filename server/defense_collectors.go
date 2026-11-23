@@ -20,8 +20,9 @@ import (
 )
 
 type collectorIdentity struct {
-	ID     int64
-	Source string
+	ID        int64
+	Source    string
+	TokenHash string
 }
 type collectorContextKey struct{}
 
@@ -112,7 +113,26 @@ func (s *Server) authenticateCollector(ctx context.Context, header string) (*col
 	if subtle.ConstantTimeCompare([]byte(got), []byte(hash)) != 1 {
 		return nil, errCollectorCredential
 	}
-	return &collectorIdentity{ID: id, Source: source}, nil
+	return &collectorIdentity{ID: id, Source: source, TokenHash: got}, nil
+}
+
+
+// Hold a row SHARE lock throughout ingestion so a concurrent token rotation
+// or revocation cannot race an already-authenticated in-flight batch.
+// Requests authenticated *before* a rotation but starting the transaction
+// afterwards are rejected by rechecking the digest under this lock.
+func validateCollectorTransaction(ctx context.Context, tx *sql.Tx, identity *collectorIdentity) (bool, error) {
+	var currentHash string
+	err := tx.QueryRowContext(ctx, `SELECT token_hash FROM defense_collectors
+		WHERE id=$1 AND source=$2 AND revoked_at IS NULL FOR SHARE`,
+		identity.ID, identity.Source).Scan(&currentHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return subtle.ConstantTimeCompare([]byte(identity.TokenHash), []byte(currentHash)) == 1, nil
 }
 
 // Called within the event ingestion transaction. This shared SQL minute

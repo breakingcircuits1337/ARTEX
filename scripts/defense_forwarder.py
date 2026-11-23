@@ -210,6 +210,10 @@ class Spool:
                 # copytruncate rotation: the old file was truncated in place.
                 # A copy may have raced the writer: report uncertainty to operator.
                 print("WARNING: source was truncated; copytruncate can lose events", file=sys.stderr)
+                # Persist the reset even when no new record has arrived. Otherwise
+                # rapid growth past the old offset could skip fresh log entries.
+                with self.db:
+                    self.db.execute("UPDATE source_cursors SET offset=0 WHERE path=?", (str(path),))
                 return path, current, 0, False
             return path, current, offset, False
         # Rename/create rotation: drain the old inode before switching to the

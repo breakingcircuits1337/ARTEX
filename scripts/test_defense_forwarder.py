@@ -107,6 +107,26 @@ class ForwarderTests(unittest.TestCase):
                 ids = [record["event_id"] for _,record in spool.batch(20)]
                 self.assertEqual(ids, ["a","b","c"])
 
+    def test_copytruncate_checkpoint_persists_when_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = pathlib.Path(tmp)
+            log = folder / "sensor.jsonl"
+            log.write_text('{"kind":"other","event_id":"old"}\\n')
+            with forwarder.Spool(folder / "state.db", "generic") as spool:
+                self.assertEqual(spool.stage(log, 20), 1)
+                log.write_text("")
+                self.assertEqual(spool.stage(log, 20), 0)
+                cursor = spool.db.execute(
+                    "SELECT offset FROM source_cursors WHERE path=?", (str(log),)
+                ).fetchone()
+                self.assertEqual(cursor[0], 0)
+                log.write_text('{"kind":"other","event_id":"new"}\\n')
+                self.assertEqual(spool.stage(log, 20), 1)
+                self.assertEqual(
+                    [record["event_id"] for _, record in spool.batch(20)],
+                    ["old", "new"],
+                )
+
     def test_invalid_record_does_not_advance_cursor(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = pathlib.Path(tmp)

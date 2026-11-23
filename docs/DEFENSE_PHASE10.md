@@ -18,7 +18,10 @@ authorized, controlled network deployment; it is not an OT certification.
   `POST /api/defense/collectors/{id}/rotate` and
   `POST /api/defense/collectors/{id}/revoke` use existing admin JWT session
   and same-origin protections. List returns **no token hashes**.
-- Rotation immediately invalidates the previous token and preserves the
+- Rotation/revocation coordinates with in-flight ingestion using a row lock:
+  already-authenticated requests revalidate their digest within the database
+  transaction, so a completed rotation invalidates subsequent writes.
+  Rotation immediately invalidates the previous token and preserves the
   collector's ID, source, and evidence provenance.
 - A per-collector PostgreSQL minute bucket admits **up to 600 events/minute**
   across all server instances. Over-quota batches return HTTP 429 and

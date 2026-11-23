@@ -95,6 +95,9 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	var collectorID any
 	if collector != nil {
+		valid, err := validateCollectorTransaction(ctx, tx, collector)
+		if err != nil { writeErr(w, 503, "collector policy unavailable"); return }
+		if !valid { writeErr(w, 401, "collector credential changed or revoked"); return }
 		collectorID = collector.ID
 		allowed, err := s.reserveCollectorBudget(ctx, tx, collector.ID, len(events))
 		if err != nil {
