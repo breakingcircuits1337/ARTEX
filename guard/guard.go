@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/intercept"
+	"github.com/Autumn-27/artex/defense"
 	"github.com/Autumn-27/norma/hook"
 )
 
@@ -83,6 +84,11 @@ func (g *Guard) Hooks() *hook.Registry { return g.reg }
 
 func (g *Guard) preToolUse(ctx context.Context, ev hook.Event) hook.Result {
 	cmd := toolAuditCommand(ev)
+	// Non-overridable defensive policy: evaluated before user-defined intercept
+	// rules, including target-only guards used by planner and main agents.
+	if defense.Restricted() && !defense.ToolAllowed(ev.ToolName) {
+		return g.block(ev.ToolName, systemBlockMessage("defense mode prohibits this tool"), cmd)
+	}
 	res := g.applyIntercept(ctx, ev, cmd)
 	if g.targetOnly {
 		// Not recorded on a pass: the audit ring is for the gated worker and chat

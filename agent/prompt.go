@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"github.com/Autumn-27/artex/defense"
 	"sync"
 	"text/template"
 	"time"
@@ -63,12 +64,15 @@ func renderSystem(agentKey, def string, vars any) string {
 		}
 	}
 	if out, err := renderTmpl(tmpl, vars); err == nil {
+		if defense.Restricted() { return out + "\n\n" + defense.Instructions }
 		return out
 	}
 	// DB template broke (e.g. references an out-of-catalog var) → code default.
 	if out, err := renderTmpl(def, vars); err == nil {
+		if defense.Restricted() { return out + "\n\n" + defense.Instructions }
 		return out
 	}
+	if defense.Restricted() { return def + "\n\n" + defense.Instructions }
 	return def
 }
 

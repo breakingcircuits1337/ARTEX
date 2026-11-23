@@ -19,6 +19,7 @@ import (
 
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/config"
+	"github.com/Autumn-27/artex/defense"
 	pgdb "github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/egress"
 	"github.com/Autumn-27/artex/enrich"
@@ -533,7 +534,10 @@ func NewManager(dir, proxyAddr string) (*Manager, error) {
 			log.Printf("[proxy] global proxy %q invalid, ignored; set it again in Settings (shown without credentials, empty when it cannot be parsed)", proxyWithoutCredentials(m.globalProxy))
 		}
 	}
-	m.enrich = enrich.New(m.assets, m.ProxyAddr, 4)
+	// Passive defensive mode cannot automatically resolve or probe discovered assets.
+	if !defense.Restricted() {
+		m.enrich = enrich.New(m.assets, m.ProxyAddr, 4)
+	}
 	// Reconcile the seeded browser MCP with the persisted capture state, so a
 	// restart with capture already on keeps Playwright routed through the proxy.
 	m.syncBrowserMCPProxy()
