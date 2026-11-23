@@ -23,7 +23,7 @@ func TestPolicyDenyByDefault(t *testing.T) {
  "mcp__remote__run", "custom_scan", ""} {
   if ToolAllowed(name) { t.Errorf("unsafe tool %q allowed", name) }
  }
- for _, name := range []string{"Read", "Grep", "list_assets", "record_fact", "graph_overview"} {
+ for _, name := range []string{"Read", "Grep", "list_assets", "assess_exposure", "record_fact", "graph_overview"} {
   if !ToolAllowed(name) { t.Errorf("reviewed tool %q denied", name) }
  }
 }
