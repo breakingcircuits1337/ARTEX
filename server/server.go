@@ -27,6 +27,7 @@ import (
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/archivestore"
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/defense"
 	"github.com/Autumn-27/artex/egress"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/llmpool"
@@ -1099,7 +1100,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
-	out := map[string]any{"ok": true, "service": "artex", "version": BuildVersion}
+	out := map[string]any{"ok": true, "service": "artex", "version": BuildVersion, "mode": defense.Mode()}
 	// Opt-in only (ARTEX_UPDATE_CHECK); off, this returns "" without any request.
 	if latest := updates.newerVersion(r.Context(), time.Now(), BuildVersion); latest != "" {
 		out["latest_version"] = latest
