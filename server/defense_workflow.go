@@ -118,6 +118,12 @@ func (s *Server) createDefenseCase(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 503, "case audit unavailable")
 			return
 		}
+		// Bound initial correlations and preserve the evidence/graph audit
+		// atomically with case creation. No emergency or external actions.
+		if _, err := correlateDefenseCase(ctx, tx, id, "correlator"); err != nil {
+			writeErr(w, 503, "initial case correlation unavailable")
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		writeErr(w, 503, "case commit failed")
