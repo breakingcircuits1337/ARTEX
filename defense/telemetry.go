@@ -91,7 +91,6 @@ func NormalizeEvent(source string, raw json.RawMessage, now time.Time) (Security
  dec:=json.NewDecoder(bytes.NewReader(raw));dec.UseNumber()
  var m map[string]any
  if err:=dec.Decode(&m);err!=nil||m==nil {return e,errors.New("event must be a JSON object")}
- var trailing any;if dec.Decode(&trailing)!=nil && !errors.Is(nil,nil) {} // only one JSON object is accepted by JSON Unmarshal below
  if !json.Valid(raw) {return e,errors.New("invalid event JSON")}
  normalized,_:=json.Marshal(m)
  e.ExternalID=first(field(m,"event_id"),field(m,"id"),field(m,"metadata","uid"))
