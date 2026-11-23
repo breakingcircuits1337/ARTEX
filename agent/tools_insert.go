@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/Autumn-27/artex/defense"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -623,6 +624,33 @@ func (t *ToolSet) listAssets() actool.CoreTool {
 	)
 }
 
+// assessExposure provides defensive prioritization from already-stored asset metadata.
+// It cannot scan, resolve or reach the asset. IDs are always scoped by AssetStore.
+func (t *ToolSet) assessExposure() actool.CoreTool {
+	return readTool("assess_exposure",
+		"Read-only defensive exposure triage of existing authorized asset IDs. This does not test reachability or prove a vulnerability. Pass 1..50 asset IDs obtained from list_assets.",
+		obj(map[string]any{
+			"ids": map[string]any{"type":"array","items":map[string]any{"type":"integer"},"description":"Existing in-scope asset IDs (1..50); never a network target"},
+		}, "ids"),
+		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
+			if t.as == nil { return actool.Errorf("asset inventory is unavailable"), nil }
+			var args struct { IDs []int64 `json:"ids"` }
+			if err := json.Unmarshal(in, &args); err != nil { return actool.Errorf("invalid asset IDs"), nil }
+			if len(args.IDs) == 0 || len(args.IDs) > 50 { return actool.Errorf("provide 1..50 asset IDs"), nil }
+			for _, id := range args.IDs {
+				if id <= 0 { return actool.Errorf("asset IDs must be positive"), nil }
+			}
+			assets, err := t.as.GetByIDsInScope(t.taskID, args.IDs)
+			if err != nil { return actool.Errorf("failed to read scoped assets: " + err.Error()), nil }
+			return jsonResult(map[string]any{
+				"scope": "authorized inventory only",
+				"proof": "metadata-only; not confirmation of reachability or exploitability",
+				"reviewed_count": len(assets),
+				"assessments": defense.AssessAssets(assets),
+			})
+		})
+}
+
 // listCompanies lets an agent enumerate companies with their scope + asset count.
 func (t *ToolSet) listCompanies() actool.CoreTool {
 	return readTool(
@@ -692,7 +720,7 @@ func (t *ToolSet) WorkerTools() []actool.CoreTool {
 		// asset management (handlers guard nil store internally).
 		// add_company_scope is not given to workers: defining a company's asset scope is
 		// the duty of planning/main-control/Auto; a worker only executes exploration.
-		t.insertAssets(), t.listAssets(),
+		t.insertAssets(), t.listAssets(), t.assessExposure(),
 		// bbot output by path: in-scope assets via insert_assets, the rest as
 		// third_party_intel facts (never auto-scoped).
 		t.ingestBbot(),
@@ -734,7 +762,7 @@ func (t *ToolSet) MainAgentTools() []actool.CoreTool {
 		// runtime, bounding the planner/workers' exploration.
 		t.setConstraints(),
 		// asset management (handlers guard nil store internally)
-		t.insertAssets(), t.addCompanyScope(), t.listAssets(),
+		t.insertAssets(), t.addCompanyScope(), t.listAssets(), t.assessExposure(),
 		t.addFinding(), t.recordFact(),
 		t.addTaskScope(),
 		// list_untested_assets: query untested assets in this task's scope on demand
