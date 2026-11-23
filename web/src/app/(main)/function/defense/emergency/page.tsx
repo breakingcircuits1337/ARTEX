@@ -104,6 +104,7 @@ export default function EmergencyContainmentPage() {
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [now, setNow] = React.useState(Date.now());
+  const browsingOlder = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
     const [freshStatus, freshActions, freshAudit] = await Promise.all([
@@ -112,9 +113,16 @@ export default function EmergencyContainmentPage() {
       http<{ audit: AuditRow[] }>("/defense/emergency/audit?limit=50"),
     ]);
     setStatus(freshStatus);
-    setActions(freshActions.actions);
-    setNextCursor(freshActions.next_before_id);
-    setHasMore(freshActions.has_more);
+    if (browsingOlder.current) {
+      setActions(previous => [
+        ...freshActions.actions,
+        ...previous.filter(item => !freshActions.actions.some(current => current.id === item.id)),
+      ]);
+    } else {
+      setActions(freshActions.actions);
+      setNextCursor(freshActions.next_before_id);
+      setHasMore(freshActions.has_more);
+    }
     setAudit(freshAudit.audit);
     setNow(Date.now());
   }, []);
@@ -168,6 +176,9 @@ export default function EmergencyContainmentPage() {
     try {
       await http(`/defense/emergency/actions/${action.id}/revert`, { method: "POST" });
       await refresh();
+      setActions(previous => previous.map(item =>
+        item.id === action.id ? { ...item, status: "reverted", reversible: false } : item,
+      ));
       setMessage(`Action #${action.id} reversed. Source ${action.source_ip} is suppressed for 30 minutes.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Kernel reversal not confirmed");
@@ -199,6 +210,7 @@ export default function EmergencyContainmentPage() {
     setBusy(true);
     try {
       const page = await http<ActionPage>(`/defense/emergency/actions?limit=100&before_id=${nextCursor}`);
+      browsingOlder.current = true;
       setActions(prev => [...prev, ...page.actions.filter(item => !prev.some(a => a.id === item.id))]);
       setNextCursor(page.next_before_id);
       setHasMore(page.has_more);
