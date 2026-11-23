@@ -766,6 +766,12 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/ready", s.ready)
+	// Phase 2: normalized defensive telemetry. Protected by existing API JWT
+	// middleware; never exposed anonymously or in penetration-testing mode.
+	mux.HandleFunc("POST /api/defense/events", s.ingestDefenseEvents)
+	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
+	mux.HandleFunc("GET /api/defense/alerts", s.listDefenseAlerts)
+	mux.HandleFunc("GET /api/defense/summary", s.defenseSummary)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/logs", s.getLogs)
 	mux.HandleFunc("GET /api/logs/history", s.getLogsHistory)
