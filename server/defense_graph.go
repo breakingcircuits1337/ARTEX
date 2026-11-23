@@ -44,7 +44,7 @@ func (s *Server) defenseCaseGraph(w http.ResponseWriter, r *http.Request) {
 	var observed time.Time
 	var rawAssets []byte
 	err := pg.QueryRowContext(r.Context(),
-		`SELECT c.alert_id,c.status,a.rule_id,a.title,a.severity,a.event_id,a.asset_ids,
+		`SELECT c.alert_id,c.status,a.rule_id,a.title,a.severity,a.event_id,CASE WHEN e.company_id IS NOT NULL THEN a.asset_ids ELSE '[]'::jsonb END,
 		        e.source,e.external_id,e.observed_at
 		   FROM defense_cases c
 		   JOIN defense_alerts a ON a.id=c.alert_id
