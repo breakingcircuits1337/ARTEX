@@ -105,6 +105,8 @@ def iter_records(path: pathlib.Path, follow: bool):
                 stream.seek(-len(line), 1)
                 yield None
                 continue
+            if not line.strip():
+                continue
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 raise ValueError("event record must be a JSON object")
@@ -232,6 +234,7 @@ class Spool:
         records = []
         total_bytes = 0
         reached_eof = False
+        last_offset = offset
         with selected.open("rb") as stream:
             st = os.fstat(stream.fileno())
             if (st.st_dev, st.st_ino) != (stat.st_dev, stat.st_ino):
@@ -248,6 +251,9 @@ class Spool:
                     if not follow or rotated:
                         raise ValueError("incomplete source record; cursor unchanged")
                     break
+                if not line.strip():
+                    last_offset = stream.tell()
+                    continue
                 try:
                     obj = json.loads(line)
                 except (ValueError, UnicodeDecodeError):
@@ -262,9 +268,10 @@ class Spool:
                     break
                 total_bytes += n
                 records.append((raw, stream.tell()))
-        if not records and not (rotated and reached_eof):
+                last_offset = stream.tell()
+        if not records and not (rotated and reached_eof) and last_offset == offset:
             return 0
-        new_offset = records[-1][1] if records else offset
+        new_offset = records[-1][1] if records else last_offset
         new_device, new_inode = stat.st_dev, stat.st_ino
         if rotated and reached_eof:
             replacement = path.stat()

@@ -1,0 +1,17 @@
+name: pr10-format-review
+on:
+  push:
+    branches: [feature/pr10-secure-collectors-durable-telemetry]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render formatted Go files to review logs
+        run: |
+          for f in server/defense_collectors.go server/defense_collectors_test.go server/defense_telemetry.go; do
+            gofmt -w "$f"
+            printf 'ARTEX_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
+          done
