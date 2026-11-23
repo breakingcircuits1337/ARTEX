@@ -31,9 +31,9 @@ func TestDetectionDownloadsFixedEngineNames(t *testing.T) {
 	t.Setenv("ARTEX_MODE", "defense")
 	s := &Server{}
 	for _, tc := range []struct {
-		engine string
+		engine     string
 		wantStatus int
-		content string
+		content    string
 	}{
 		{"suricata", http.StatusOK, "sid:9900001;"},
 		{"yara", http.StatusOK, "rule ARTEX_JSP_Webshell_Numbered"},
