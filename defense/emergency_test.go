@@ -100,6 +100,35 @@ func TestEmergencyRequiresEvidence(t *testing.T) {
 	}
 }
 
+func TestPolicyFingerprintRequiresNewOperatorArm(t *testing.T) {
+	cfg := armedEmergencyTest(t)
+	simHash := cfg.Fingerprint()
+	t.Setenv("ARTEX_AUTO_CONTAIN_MODE", "nftables")
+	live, err := LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live.Fingerprint() == simHash {
+		t.Fatal("simulation arm could authorize live kernel mode")
+	}
+	t.Setenv("ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS", "192.0.2.0/24")
+	widened, err := LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if widened.Fingerprint() == live.Fingerprint() {
+		t.Fatal("changed destination scope failed to invalidate previous arm")
+	}
+	t.Setenv("ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES", "critical-new")
+	changed, err := LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.Fingerprint() == widened.Fingerprint() {
+		t.Fatal("new detection rule failed to invalidate previous arm")
+	}
+}
+
 func TestEmergencyInvalidConfigurationFailsClosed(t *testing.T) {
 	t.Setenv("ARTEX_MODE", "defense")
 	t.Setenv("ARTEX_AUTO_CONTAIN_MODE", "nftables")
