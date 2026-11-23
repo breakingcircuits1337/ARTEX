@@ -33,6 +33,7 @@ var allowedTools = map[string]struct{}{
  "Read": {}, "LS": {}, "Glob": {}, "Grep": {},
  "TodoRead": {}, "TodoWrite": {},
  "graph_overview": {}, "list_assets": {}, "list_companies": {},
+ "assess_exposure": {},
  "list_findings": {}, "list_facts": {}, "node_detail": {},
  "expand_digest": {}, "get_worker_output": {}, "get_worker_trace": {},
  "search_all_worker_traces": {}, "list_worker_traces": {},
