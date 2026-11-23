@@ -257,7 +257,7 @@ export default function ResponseReviewPage() {
                     onClick={() => void triage(c, "dismissed")}>Dismiss</Button>}
                   <Button disabled={busy} variant="outline" onClick={() => void readAudit(c.id)}>Audit trail</Button>
                   <Button disabled={busy} variant="outline" onClick={() => void readGraph(c.id)}>Evidence graph</Button>
-                  <Button asChild variant="outline"><Link href={`/function/defense/cases/${c.id}/intelligence`}>Threat intelligence & timeline</Link></Button>
+                  <Button asChild variant="outline"><Link href={`/function/defense/intelligence?case=${c.id}`}>Threat intelligence & timeline</Link></Button>
                 </div>
               </div>
             </div>
