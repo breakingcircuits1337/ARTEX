@@ -70,11 +70,13 @@ func (s *Server) stageEmergencyAction(
 	}
 	// The SHARE lock coordinates with operator pause through transaction commit.
 	var paused bool
+	var approvedHash string
 	if err := tx.QueryRowContext(ctx,
-		"SELECT paused FROM defense_emergency_control WHERE id=1 FOR SHARE").Scan(&paused); err != nil {
+		"SELECT paused,policy_hash FROM defense_emergency_control WHERE id=1 FOR SHARE").
+		Scan(&paused, &approvedHash); err != nil {
 		return 0, err
 	}
-	if paused {
+	if paused || approvedHash != cfg.Fingerprint() {
 		return 0, nil
 	}
 	var suppressed bool
@@ -172,8 +174,10 @@ func (s *Server) applyEmergencyAction(id int64) {
 	}
 	defer tx.Rollback()
 	var paused bool
+	var approvedHash string
 	if err := tx.QueryRowContext(ctx,
-		"SELECT paused FROM defense_emergency_control WHERE id=1 FOR SHARE").Scan(&paused); err != nil {
+		"SELECT paused,policy_hash FROM defense_emergency_control WHERE id=1 FOR SHARE").
+		Scan(&paused, &approvedHash); err != nil {
 		return
 	}
 	var source, destination, backend, status string
@@ -187,6 +191,7 @@ func (s *Server) applyEmergencyAction(id int64) {
 	}
 	now := time.Now()
 	if paused || cfgErr != nil || cfg.Mode == defense.EmergencyOff ||
+		approvedHash != cfg.Fingerprint() ||
 		string(cfg.Mode) != backend || !cfg.EligibleIP(source, destination) {
 		// An interrupted prior attempt may have changed the kernel before
 		// the SQL commit. Never claim "reverted" until the helper has
