@@ -6,6 +6,7 @@ import { Activity, BookOpen, GitBranch, RefreshCw, ShieldAlert } from "lucide-re
 import { http } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InvestigationPanel } from "./investigation-panel";
 
 type Indicator = {
   id: number; type: string; value: string; confidence: number;
@@ -316,6 +317,8 @@ export default function ThreatIntelligencePage() {
           </Card>
         </>
       )}
+
+      {validID && <InvestigationPanel caseID={id} />}
 
       {timeline && (
         <Card>
