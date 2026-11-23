@@ -325,8 +325,7 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 	s.wireInterceptReviewer() // LLM fallback approval: commands that hit no interception rule go to the model for judgment
 	// Emergency response never depends on the LLM, its worker queue, or an
 	// open browser tab. Resume persisted actions after a process restart.
-	if cfg, err := defense.LoadEmergencyConfig(); err == nil &&
-		cfg.Mode != defense.EmergencyOff && m.pg != nil {
+	if defense.Restricted() && m.pg != nil {
 		go s.runEmergencyReconciler()
 	}
 	return s
