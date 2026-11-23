@@ -108,7 +108,7 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter,r *http.Request) {
  // Apply immediately after commit; no LLM, manual queue, or polling delay.
  // The bounded restart reconciler catches a process crash between commit
  // and kernel enforcement. All actions remain viewable and reversible.
- for _,actionID:=range emergencyActionIDs {s.applyEmergencyAction(actionID)}
+ s.dispatchEmergencyActions(emergencyActionIDs)
  writeJSON(w,http.StatusOK,map[string]any{"ingested":ingested,"duplicates":duplicates,"alerts_created":alertCount,"events_linked":linked,"emergency_actions_queued":len(emergencyActionIDs)})
 }
 
