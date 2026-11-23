@@ -89,6 +89,8 @@ type Server struct {
 	concMu sync.Mutex
 
 	readyPG readyCache
+    defenseOpsCache defenseOpsCache
+    defenseIngest defenseIngestRuntime
 
 	cfgMu     sync.Mutex
 	chatAgent *agent.ChatAgent // conversational runner for the chat page; nil w/o LLM
@@ -793,6 +795,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/live", s.defenseLive)
 	mux.HandleFunc("GET /api/defense/soc/queue", s.defenseSOCQueue)
 	mux.HandleFunc("GET /api/defense/soc/health", s.defenseSOCHealth)
+    // PR #13: authenticated low-cardinality metrics and operational readiness.
+    mux.HandleFunc("GET /api/defense/operations/health", s.defenseOperationsHealth)
+    mux.HandleFunc("GET /api/defense/operations/metrics", s.defenseOperationsMetrics)
 	// Curated alert-only detector metadata and manual rule-file export.
 	mux.HandleFunc("GET /api/defense/detection-pack", s.defenseDetectionCatalog)
 	mux.HandleFunc("GET /api/defense/detection-pack/{engine}", s.defenseDetectionDownload)

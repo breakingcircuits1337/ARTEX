@@ -69,6 +69,14 @@ func (s *Server) defenseMode(w http.ResponseWriter) bool {
 }
 
 func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
+    start := time.Now()
+    measured := &ingestStatusWriter{ResponseWriter:w}
+    w=measured
+    defer func(){
+        status:=measured.status
+        if status==0 {status=http.StatusInternalServerError}
+        s.defenseIngest.observe(status,time.Since(start))
+    }()
 	if !s.defenseMode(w) {
 		return
 	}

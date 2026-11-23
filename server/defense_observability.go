@@ -5,9 +5,7 @@ package server
 // It is NOT sensor attestation, a multi-tenant security boundary or an SLA.
 import (
     "context"
-    "database/sql"
-    "errors"
-    "fmt"
+     "fmt"
     "net/http"
     "runtime"
     "strconv"
@@ -22,8 +20,7 @@ const (
     defenseOpsErrorTTL = time.Second
     defenseOpsQueryTimeout = 5 * time.Second
     defenseOpsCollectorSample = 200
-    defenseOpsSilentWindow = 15 * time.Minute
-)
+ )
 
 var defenseIngestBuckets = []struct{
     seconds float64
