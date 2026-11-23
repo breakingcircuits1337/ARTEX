@@ -55,6 +55,9 @@ def package_names(tag: str) -> set[str]:
 def _safe_member(name: str, expected_root: str) -> None:
     if not name or "\\" in name or "\x00" in name or ":" in name or name.startswith("/"):
         raise QualificationError(f"unsafe ZIP entry: {name!r}")
+    # "zip -r" emits the package's root directory as its own ZIP entry.
+    if name == expected_root + "/":
+        return
     pieces = PurePosixPath(name).parts
     if not pieces or any(p in {".", ".."} for p in name.rstrip("/").split("/")):
         raise QualificationError(f"ZIP traversal entry: {name!r}")
