@@ -778,6 +778,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/defense/cases", s.createDefenseCase)
 	mux.HandleFunc("POST /api/defense/cases/{id}/triage", s.triageDefenseCase)
 	mux.HandleFunc("GET /api/defense/cases/{id}/audit", s.listDefenseCaseAudit)
+	mux.HandleFunc("GET /api/defense/cases/{id}/graph", s.defenseCaseGraph)
 	mux.HandleFunc("POST /api/defense/cases/{id}/responses", s.proposeDefenseResponse)
 	mux.HandleFunc("GET /api/defense/responses", s.listDefenseResponses)
 	mux.HandleFunc("POST /api/defense/responses/{id}/decision", s.decideDefenseResponse)
