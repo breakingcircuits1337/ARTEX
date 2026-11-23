@@ -1,5 +1,7 @@
 # Phase 6 — Threat Correlation Graph and Incident Timelines
 
+> **Update (PR #11):** Explicitly company-bound collectors now support bounded cross-sensor correlations with two matching fields. Read [Company-scoped correlation](DEFENSE_PHASE11.md). The phase description below documents the original Phase 6 behavior; unscoped historical events do **not** gain inferred company ownership.
+
 ARTEX Phase 6 adapts the source archive's `threat_actors`, `threat_edges`,
 `kill_chain_nodes` and `kill_chain_edges` concepts to the existing ARTEX
 Phase 2/3 evidence and case model. The source is

@@ -71,6 +71,7 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 | **Phase 6** | Case-scoped observed indicators, evidence-backed relationships, provenance, confidence, and ATT&CK hypotheses | Threat correlation graph and chronological incident timeline; links are **not proof of attribution** | [Threat Correlation Graph](docs/DEFENSE_PHASE6.md) |
 | **Phase 7** | Durable autonomous *deterministic* investigation, evidence gaps, bounded retry, and human-verdict workflow | Unverified findings tied to source events; cancel/pause; opt-in high/critical case intake | [Autonomous Defensive Investigation](docs/DEFENSE_PHASE7.md) |
 | **Phase 8** | Near-real-time SOC revisions, sensor freshness, alert rates, and priority review queue | Authenticated SSE with polling fallback; operator-created cases and ingestion-health panels | [Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+| **PR #11** | Company-scoped evidence and cautious cross-sensor case correlation | Explicit collector company binding, bounded two-field evidence links, SQL cross-company guards; **not multi-tenant RBAC** | [Company-scoped correlation](docs/DEFENSE_PHASE11.md) |
 
 ### Defense architecture
 
@@ -123,6 +124,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 | Inspect indicators, evidence provenance, ATT&CK hypotheses and timelines | [Phase 6: Correlation Graph](docs/DEFENSE_PHASE6.md) |
 | Control automated case analysis, pause, cancel, and review findings | [Phase 7: Investigation](docs/DEFENSE_PHASE7.md) |
 | Diagnose stream reconnects, collector freshness and alert priority | [Phase 8: Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+| Enroll company-scoped collectors and review independent sensor matches | [PR #11: Tenant-aware evidence](docs/DEFENSE_PHASE11.md) |
 
 ---
 
