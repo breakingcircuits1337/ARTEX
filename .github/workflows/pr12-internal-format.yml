@@ -1,0 +1,21 @@
+name: pr12-format-review
+
+on:
+  push:
+    branches: [feat/pr12-sigma-detection-attack-validation]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Emit formatted changed Go sources for review
+        run: |
+          for f in detectionpack/sigma.go detectionpack/sigma_test.go defense/correlation.go defense/telemetry.go defense/telemetry_sigma_test.go server/defense_detection_pack.go server/defense_detection_pr12_test.go server/defense_telemetry.go; do
+            cp "$f" /tmp/pr12-original.go
+            gofmt -w "$f"
+            if ! cmp -s /tmp/pr12-original.go "$f"; then
+              printf 'ARTEX12_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
+            fi
+          done
