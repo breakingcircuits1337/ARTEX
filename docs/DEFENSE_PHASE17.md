@@ -28,3 +28,14 @@ The normal CI matrix additionally tests the frontend, Python forwarder, and shel
 - Workspace upload paths, archive move/restore/recovery operations, and third-party background output paths need their own descriptor-relative audits. This PR does not claim to close them.
 - Confined file opens do not solve hard-link source provenance or modified file contents after an already opened handle; additional policy and storage ownership controls are recommended.
 - Containment remains disabled by default and has not been certified for production or industrial environments.
+
+## Legacy test fixtures and the default-mode migration
+
+The pre-PR17 `agent`, `guard`, and `server` integration suites assume active-testing tools are available. Their package-level `TestMain` now opts into `pentest` **only in test processes when ARTEX_MODE is unset**. This does not alter the production binary, embedded application behavior, or end-user defaults. Tests that explicitly set `ARTEX_MODE=defense` continue to exercise the restricted policy.
+
+The `defense` package's `TestModeValidation` explicitly checks that an empty mode resolves to `defense` with restrictions enabled. To confirm both modes locally:
+```bash
+env -u ARTEX_MODE go test -count=1 ./defense
+env -u ARTEX_MODE go test -count=1 ./agent ./guard ./server
+```
+The latter runs the legacy test fixture baseline; the Go package's `TestMain` sets `pentest` solely for its own test binary.

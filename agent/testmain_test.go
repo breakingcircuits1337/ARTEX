@@ -14,6 +14,13 @@ import (
 // agent test suite so cross-package DELETE cleanup races with db/server
 // packages are avoided when running `go test ./...`.
 func TestMain(m *testing.M) {
+	// The historical agent fixture suite exercises active-testing tool paths.
+	// Declare its required mode explicitly, rather than depending on the
+	// production default (which is now the safer "defense"). Tests that need
+	// defense still override ARTEX_MODE with t.Setenv.
+	if os.Getenv("ARTEX_MODE") == "" {
+		os.Setenv("ARTEX_MODE", "pentest")
+	}
 	// Norma keeps background-task output in os.TempDir()/norma. The tests get a temp
 	// directory of their own, so a session they start never writes the host's
 	// <temp>/norma. It is world-writable and sticky like /tmp: MkdirTemp makes it

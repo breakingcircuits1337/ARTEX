@@ -14,6 +14,12 @@ import (
 // server test suite so cross-package DELETE cleanup races with db/agent
 // packages are avoided when running `go test ./...`.
 func TestMain(m *testing.M) {
+	// Legacy server integration fixtures exercise authorized active-testing
+	// paths. Make that test-only precondition explicit; production stays in
+	// defense mode when ARTEX_MODE is unset. Defense tests use t.Setenv.
+	if os.Getenv("ARTEX_MODE") == "" {
+		os.Setenv("ARTEX_MODE", "pentest")
+	}
 	// The executor tests (execpriv_root_linux_test.go) start this binary as the bash
 	// shim and as the MCP drop shim, the way cmd/artex's main does.
 	RunExecShimIfRequested(os.Args)
