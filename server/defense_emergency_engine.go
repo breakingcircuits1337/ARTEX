@@ -90,7 +90,7 @@ func (s *Server) stageEmergencyAction(
 	var active, perHour int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM defense_emergency_actions
-		WHERE status IN ('pending','active')`).Scan(&active); err != nil {
+		WHERE status IN ('pending','active','failed')`).Scan(&active); err != nil {
 		return 0, err
 	}
 	if active >= cfg.MaxActive {
@@ -188,16 +188,39 @@ func (s *Server) applyEmergencyAction(id int64) {
 	now := time.Now()
 	if paused || cfgErr != nil || cfg.Mode == defense.EmergencyOff ||
 		string(cfg.Mode) != backend || !cfg.EligibleIP(source, destination) {
+		// An interrupted prior attempt may have changed the kernel before
+		// the SQL commit. Never claim "reverted" until the helper has
+		// verified that a possible stale entry is actually absent.
+		if backend == "nftables" {
+			if err := (nftEmergencyBackend{}).Revert(ctx, source); err != nil {
+				if auditErr := updateEmergencyState(ctx, tx, id, "failed",
+					"Could not verify kernel rollback after pause/scope change",
+					"policy-engine", "apply_failed", 0); auditErr == nil {
+					_ = tx.Commit()
+				}
+				return
+			}
+		}
 		if err := updateEmergencyState(ctx, tx, id, "reverted",
-			"Skipped before application: emergency mode paused or scope invalid",
+			"Admission cancelled; kernel entry verified absent where applicable",
 			"policy-engine", "reversed", 0); err == nil {
 			_ = tx.Commit()
 		}
 		return
 	}
 	if !expires.After(now) {
+		if backend == "nftables" {
+			if err := (nftEmergencyBackend{}).Revert(ctx, source); err != nil {
+				if auditErr := updateEmergencyState(ctx, tx, id, "failed",
+					"Expired pending action; kernel absence not verified",
+					"policy-engine", "apply_failed", 0); auditErr == nil {
+					_ = tx.Commit()
+				}
+				return
+			}
+		}
 		if err := updateEmergencyState(ctx, tx, id, "expired",
-			"Pending action expired without execution",
+			"Pending action expired and kernel absence verified",
 			"policy-engine", "expired", 0); err == nil {
 			_ = tx.Commit()
 		}
