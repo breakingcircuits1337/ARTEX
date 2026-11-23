@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Tag publication reruns this exact test matrix via workflow_call.
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   go:
