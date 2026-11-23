@@ -28,7 +28,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
     let signature = "";
     let generation = 0;
     let controller: AbortController | null = null;
-    let retry: ReturnType<typeof setTimeout> | undefined;
+    let retry: number | undefined;
     const decoder = new TextDecoder();
 
     const fallback = window.setInterval(() => {
@@ -108,8 +108,9 @@ export function useSOCLive(onRevision: () => void): StreamState {
         // Polling is a durable fallback for buffering proxies, load limits,
         // server restart, and interrupted network connections.
       } finally {
+        window.clearTimeout(initialWatchdog);
         if (myGeneration === generation) active = false;
-          if (controller === connection) controller = null;
+        if (controller === connection) controller = null;
         connection.abort();
       }
       if (!stopped && !document.hidden && myGeneration === generation) {
@@ -135,7 +136,6 @@ export function useSOCLive(onRevision: () => void): StreamState {
       stopped = true;
       controller?.abort();
       if (retry) window.clearTimeout(retry);
-      if (initialWatchdog) window.clearTimeout(initialWatchdog);
       window.clearInterval(fallback);
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
