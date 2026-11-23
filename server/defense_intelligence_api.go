@@ -211,6 +211,38 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	rows, err = pg.QueryContext(r.Context(), `
+		SELECT ev.indicator_id,ev.event_id,ev.evidence_role,ev.observed_at,
+		       e.source,e.external_id
+		  FROM defense_indicator_evidence ev
+		  JOIN defense_events e ON e.id=ev.event_id
+		 WHERE ev.case_id=$1 ORDER BY ev.event_id,ev.indicator_id LIMIT 250`, id)
+	if err != nil {
+		writeErr(w, 503, "indicator provenance unavailable")
+		return
+	}
+	provenance := make([]map[string]any, 0)
+	for rows.Next() {
+		var indicatorID, eventID int64
+		var role, source, external string
+		var observed time.Time
+		if err := rows.Scan(&indicatorID, &eventID, &role, &observed, &source, &external); err != nil {
+			rows.Close()
+			writeErr(w, 503, "provenance scan failed")
+			return
+		}
+		provenance = append(provenance, map[string]any{
+			"indicator_id": indicatorID, "event_id": eventID,
+			"evidence_role": role, "observed_at": observed,
+			"source": source, "external_id": external,
+		})
+	}
+	scanErr = rows.Err()
+	rows.Close()
+	if scanErr != nil {
+		writeErr(w, 503, "provenance iterator failed")
+		return
+	}
+	rows, err = pg.QueryContext(r.Context(), `
 		SELECT o.event_id,o.link_reason,o.linkage_confidence,o.recorded_at,
 		       e.source,e.external_id,e.kind,e.observed_at,e.src_ip,e.dst_ip,e.host
 		  FROM defense_case_observations o
@@ -310,7 +342,7 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, 200, map[string]any{
 		"case_id": id, "mode": "read_only",
 		"indicators": indicators, "observations": observations,
-		"relations": relations, "techniques": techniques,
+		"indicator_evidence": provenance, "relations": relations, "techniques": techniques,
 		"note": "Confidence scores describe evidence linkage or analyst hypotheses, never probability of compromise. Evidence may be incomplete and correlation is not attribution.",
 	})
 }
@@ -343,6 +375,8 @@ func (s *Server) getDefenseTimeline(w http.ResponseWriter, r *http.Request) {
 	rows, err := pg.QueryContext(r.Context(), `
 		SELECT kind,reference_id,occurred_at,summary,provenance,confidence
 		FROM (
+		  SELECT kind,reference_id,occurred_at,summary,provenance,confidence
+		  FROM (
 		  SELECT 'sensor_event'::text AS kind, e.id AS reference_id,
 		         e.observed_at AS occurred_at,
 		         left(e.kind||' / '||o.link_reason,180) AS summary,
@@ -364,8 +398,10 @@ func (s *Server) getDefenseTimeline(w http.ResponseWriter, r *http.Request) {
 		  SELECT 'intel_audit',a.id,a.recorded_at,
 		         left(a.audit_kind||': '||a.detail,180),
 		         a.actor,0 FROM defense_case_intel_audit a WHERE a.case_id=$1
-		) AS history
-		ORDER BY occurred_at ASC,kind ASC,reference_id ASC LIMIT 250`, id)
+		  ) AS history
+		  ORDER BY occurred_at DESC,kind DESC,reference_id DESC LIMIT 250
+		) AS recent
+		ORDER BY occurred_at ASC,kind ASC,reference_id ASC`, id)
 	if err != nil {
 		writeErr(w, 503, "case timeline unavailable")
 		return
