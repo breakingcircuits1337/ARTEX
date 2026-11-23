@@ -44,23 +44,25 @@ All automatic responses require **both**:
 - The operator must set a non-off mode **and click ARM** in the SOC dashboard.
   ARM is persisted; PAUSE stops new admissions. The first startup is paused.
 
-Only the following vendor-source rules may trigger:
+Only the following vendor-source rules may trigger. **An empty
+`ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES` allowlist disables automatic IDS
+blocking**, even when Suricata labels a signal critical:
 
 | Rule | Minimum corroboration |
 | --- | --- |
-| \`repeated_critical_ids_v1\` | Three or more matching critical-severity **Suricata** network alert records with the same source IP, protected destination and signature within 10 seconds |
-| \`active_password_spray_v1\` | Twelve or more different failed account names in **Wazuh** authentication events from one public IP to one protected destination within 60 seconds |
+| `repeated_critical_ids_v1` | Three or more matching critical-severity **Suricata** network alert records with the same source IP, protected destination and **operator-allowlisted exact signature** within 10 seconds |
+| `active_password_spray_v1` | Twelve or more different failed account names in **Wazuh** authentication events from one public IP to one protected destination within 60 seconds |
 
 The word "critical" here reflects the upstream sensor severity, **not** a
 verified compromise or an independently proven attribution. Forged sensor data
 can induce false positives; ensure collection/authentication is restricted and
 tune your sensor rules carefully. Most native Wazuh authentication events do
-not include \`dst_ip\`; those events are **not eligible** for auto-blocking until
+not include `dst_ip`; those events are **not eligible** for auto-blocking until
 a trusted collector supplies a verified destination IP. Do not guess an IP
 from untrusted log message text.
 
-Limits: \`ARTEX_AUTO_CONTAIN_MAX_ACTIVE\` defaults to **20** live/pending sources
-(maximum 50), \`ARTEX_AUTO_CONTAIN_MAX_PER_HOUR\` defaults to **50** (maximum 200),
+Limits: `ARTEX_AUTO_CONTAIN_MAX_ACTIVE` defaults to **20** live/pending sources
+(maximum 50), `ARTEX_AUTO_CONTAIN_MAX_PER_HOUR` defaults to **50** (maximum 200),
 and each kernel entry expires after **120 seconds** (configurable 30–300).
 A human reversal suppresses the same IP from automatic re-blocking for
 **30 minutes**. These are hard admission budgets, not claims of perfect
@@ -70,24 +72,26 @@ false-positive protection.
 
 ### A. Simulate on an ordinary ARTEX deployment
 
-In \`.env\` or container environment:
+In `.env` or container environment:
 
-\`\`\`dotenv
+```dotenv
 ARTEX_MODE=defense
 ARTEX_AUTO_CONTAIN_MODE=simulate
 # Example documentation-only destination network; replace after review.
 ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS=192.0.2.0/24
 ARTEX_AUTO_CONTAIN_EXEMPT_CIDRS=
+# Only the exact reviewed signature below can activate the IDS rule.
+ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES=Critical sensor signature
 ARTEX_AUTO_CONTAIN_TTL_SECONDS=120
 ARTEX_AUTO_CONTAIN_MAX_ACTIVE=20
 ARTEX_AUTO_CONTAIN_MAX_PER_HOUR=50
-\`\`\`
+```
 
 Restart ARTEX, open **Functions → Emergency Containment**
-(\`/function/defense/emergency\`), review the policy, and click **Arm emergency
+(`/function/defense/emergency`), review the policy, and click **Arm emergency
 policy**. Send authorized *test-only* Suricata or Wazuh events that include the
 expected destination IP and matching corroboration. In simulation the ledger
-records \`simulated\` — **no firewall changes can occur**. Verify the events,
+records `simulated` — **no firewall changes can occur**. Verify the events,
 action links, timings, audit log and single-click **Undo now**.
 
 ### B. Pre-provision and review a gateway firewall set
@@ -100,7 +104,7 @@ which will not protect local host input or another network namespace.
 scope, high-availability behavior, fail-open/fail-safe requirements, OT safety,
 management paths, and rollback access.
 
-\`\`\`nft
+```nft
 table inet artex_emergency {
     set blocked_v4 {
         type ipv4_addr
@@ -113,9 +117,9 @@ table inet artex_emergency {
         ip daddr 192.0.2.0/24 ip saddr @blocked_v4 counter drop
     }
 }
-\`\`\`
+```
 
-Use \`nft -c -f\` to syntax-check the reviewed ruleset before loading.
+Use `nft -c -f` to syntax-check the reviewed ruleset before loading.
 The gateway helper only adds/deletes **set elements**; it never installs a
 chain, changes priorities, flushes rules, or runs a shell.
 
@@ -123,30 +127,31 @@ chain, changes priorities, flushes rules, or runs a shell.
 
 Build a standalone helper:
 
-\`\`\`bash
+```bash
 go build -o artex-emergency-agent ./cmd/artex-emergency-agent
-\`\`\`
+```
 
 Run it as a separately constrained system service in the **gateway's host
 network namespace**. Its required environment is:
 
-\`\`\`dotenv
+```dotenv
 ARTEX_MODE=defense
 ARTEX_AUTO_CONTAIN_MODE=nftables
 ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS=192.0.2.0/24
+ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES=Critical sensor signature
 ARTEX_AUTO_CONTAIN_TTL_SECONDS=120
 ARTEX_AUTO_CONTAIN_MAX_ACTIVE=20
 ARTEX_AUTO_CONTAIN_MAX_PER_HOUR=50
 ARTEX_AUTO_CONTAIN_SOCKET=/run/artex/emergency.sock
-\`\`\`
+```
 
 The helper refuses to start unless the socket path is absolute, its parent
 directory has no group/world write permission, and the exclusive nft set
 exists with IPv4 timeout support. It binds **only to a Unix socket**, with
-file mode \`0660\`. It needs **CAP_NET_ADMIN only in the gateway namespace**;
+file mode `0660`. It needs **CAP_NET_ADMIN only in the gateway namespace**;
 do **not** grant this capability to the full ARTEX container. Configure the
-socket directory as, for example, root-owned \`/run/artex\` with permission
-\`0750\` and a dedicated group allowed to connect to the socket. Limit that
+socket directory as, for example, root-owned `/run/artex` with permission
+`0750` and a dedicated group allowed to connect to the socket. Limit that
 group to the ARTEX backend account. The helper revalidates destination scope,
 source exclusions, bounded TTL and supported operations independently of
 the main application.
@@ -158,9 +163,9 @@ unprivileged. **Do not publish or reverse-proxy the Unix helper to TCP**.
 For initial testing, use a disposable Linux network namespace and nftables
 ruleset rather than a real production gateway.
 
-Set the ARTEX application's environment to the same \`ARTEX_MODE=defense\`,
-\`ARTEX_AUTO_CONTAIN_MODE=nftables\`, protected/exempt CIDRs and:
-\`ARTEX_AUTO_CONTAIN_SOCKET=/run/artex/emergency.sock\`.
+Set the ARTEX application's environment to the same `ARTEX_MODE=defense`,
+`ARTEX_AUTO_CONTAIN_MODE=nftables`, protected/exempt CIDRs and:
+`ARTEX_AUTO_CONTAIN_SOCKET=/run/artex/emergency.sock`.
 
 Restart and check the SOC Emergency dashboard's backend readiness, then
 click **Arm emergency policy**. If the socket, helper or nft set is unavailable,
@@ -169,17 +174,17 @@ no live action can be armed or applied.
 ## Dashboard and API
 
 Every endpoint inherits ARTEX's existing administrator JWT + same-origin
-cookie CSRF protection, and is unavailable outside \`ARTEX_MODE=defense\`.
+cookie CSRF protection, and is unavailable outside `ARTEX_MODE=defense`.
 
 | Method | Path | Result |
 | --- | --- | --- |
-| GET | \`/api/defense/emergency/status\` | Current mode, operator arming state, readiness, scope size and action count |
-| POST | \`/api/defense/emergency/arm\` | Operator preauthorizes the fixed policy; live backend preflight required |
-| POST | \`/api/defense/emergency/pause\` | Disables new admissions; leaves existing short-lived actions until undone or TTL |
-| GET | \`/api/defense/emergency/actions?limit=100&before_id=N\` | Cursor-paged history of **all** automatic actions and evidence IDs |
-| POST | \`/api/defense/emergency/actions/{id}/revert\` | **One-click** exact-IP removal/recorded undo; 30-minute suppress |
-| POST | \`/api/defense/emergency/revert-all\` | **Panic stop**: pause, then attempt every outstanding removal |
-| GET | \`/api/defense/emergency/audit\` | Operator arming, all admissions, enforcement successes/failures and reversals |
+| GET | `/api/defense/emergency/status` | Current mode, operator arming state, readiness, scope size and action count |
+| POST | `/api/defense/emergency/arm` | Operator preauthorizes the fixed policy; live backend preflight required |
+| POST | `/api/defense/emergency/pause` | Disables new admissions; leaves existing short-lived actions until undone or TTL |
+| GET | `/api/defense/emergency/actions?limit=100&before_id=N` | Cursor-paged history of **all** automatic actions and evidence IDs |
+| POST | `/api/defense/emergency/actions/{id}/revert` | **One-click** exact-IP removal/recorded undo; 30-minute suppress |
+| POST | `/api/defense/emergency/revert-all` | **Panic stop**: pause, then attempt every outstanding removal |
+| GET | `/api/defense/emergency/audit` | Operator arming, all admissions, enforcement successes/failures and reversals |
 
 The database stores one ledger record per action with source IP, destination,
 original event ID, rule, timestamp, backend, status, kernel latency, expiry
@@ -195,19 +200,19 @@ extend the nftables kernel timeout.
 
 ## Release checklist
 
-\`\`\`bash
+```bash
 go test ./defense ./containment ./server
 go test -p 1 ./...
 ./scripts/verify.sh
 cd web && npx tsc --noEmit
-\`\`\`
+```
 
 Run simulated input and operator-rollback tests, a disposable gateway
 smoke test, PostgreSQL migration and fault-injection tests (helper down,
 process crash, duplicate messages, timeout expiry). Measure sensor-to-kernel
 p99 and alert false-positive rates, verify excluded infrastructure and
 OT/network management sources, and confirm the gateway rules really affect
-the intended traffic paths before enabling \`nftables\` mode.
+the intended traffic paths before enabling `nftables` mode.
 
 The high-speed rules are fixed and deliberately narrow. Further response
 types must **not** be added to auto mode until a reliable reversal adapter,
