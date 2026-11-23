@@ -15,17 +15,17 @@ import (
 // trigger-updated single hot row or a per-event NOTIFY. Security ingestion
 // and machine-speed emergency enforcement retain their existing fast path.
 const (
-	socStreamInterval = 2 * time.Second
+	socStreamInterval  = 2 * time.Second
 	socStreamHeartbeat = 15 * time.Second
-	socStreamLifetime = 2 * time.Minute
-	socStreamLimit = 16
+	socStreamLifetime  = 2 * time.Minute
+	socStreamLimit     = 16
 )
 
 var socStreamingSlots = make(chan struct{}, socStreamLimit)
 
 type socRevision struct {
-	Events int64 `json:"events"`
-	Alerts int64 `json:"alerts"`
+	Events            int64 `json:"events"`
+	Alerts            int64 `json:"alerts"`
 	CaseUpdatedMicros int64 `json:"case_updated_micros"`
 }
 
@@ -86,7 +86,7 @@ func (s *Server) defenseLive(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := controller.SetWriteDeadline(time.Now().Add(3*time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		if err := controller.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
 			return err
 		}
 		_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, body)
@@ -121,7 +121,7 @@ func (s *Server) defenseLive(w http.ResponseWriter, r *http.Request) {
 				last = next
 			}
 		case <-heartbeat.C:
-			if err := controller.SetWriteDeadline(time.Now().Add(3*time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			if err := controller.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
 				return
 			}
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
@@ -135,32 +135,38 @@ func (s *Server) defenseLive(w http.ResponseWriter, r *http.Request) {
 }
 
 type socAlertReview struct {
-	ID int64 `json:"id"`
-	EventID int64 `json:"event_id"`
-	CaseID int64 `json:"case_id"`
-	CaseStatus string `json:"case_status"`
-	RuleID string `json:"rule_id"`
-	Title string `json:"title"`
-	Summary string `json:"summary"`
-	Severity string `json:"severity"`
-	Priority int `json:"priority"`
-	NeedsCase bool `json:"needs_case"`
-	CreatedAt time.Time `json:"created_at"`
-	AssetIDs []int64 `json:"asset_ids"`
+	ID         int64     `json:"id"`
+	EventID    int64     `json:"event_id"`
+	CaseID     int64     `json:"case_id"`
+	CaseStatus string    `json:"case_status"`
+	RuleID     string    `json:"rule_id"`
+	Title      string    `json:"title"`
+	Summary    string    `json:"summary"`
+	Severity   string    `json:"severity"`
+	Priority   int       `json:"priority"`
+	NeedsCase  bool      `json:"needs_case"`
+	CreatedAt  time.Time `json:"created_at"`
+	AssetIDs   []int64   `json:"asset_ids"`
 }
 
 func socPriority(severity string, needsCase bool) int {
 	score := map[string]int{"critical": 90, "high": 65, "medium": 40, "low": 15}[severity]
-	if needsCase { score += 10 }
+	if needsCase {
+		score += 10
+	}
 	return score // deterministic queue sorting, NOT a compromise probability
 }
 
 // A bounded, sorted human review queue. No automatic triage/case update is
 // performed. Severity comes from the existing detector, not graph/LLM scores.
 func (s *Server) defenseSOCQueue(w http.ResponseWriter, r *http.Request) {
-	if !s.defenseMode(w) { return }
+	if !s.defenseMode(w) {
+		return
+	}
 	pg := s.pg(w)
-	if pg == nil { return }
+	if pg == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 	defer cancel()
 	rows, err := pg.QueryContext(ctx, `
@@ -175,33 +181,45 @@ func (s *Server) defenseSOCQueue(w http.ResponseWriter, r *http.Request) {
 		    CASE WHEN c.id IS NULL THEN 1 ELSE 0 END DESC,
 		    a.created_at DESC,a.id DESC
 		LIMIT 50`)
-	if err != nil { writeErr(w, 503, "SOC review queue unavailable"); return }
+	if err != nil {
+		writeErr(w, 503, "SOC review queue unavailable")
+		return
+	}
 	defer rows.Close()
 	items := make([]socAlertReview, 0, 50)
 	for rows.Next() {
 		var row socAlertReview
 		var raw []byte
-		if err := rows.Scan(&row.ID,&row.EventID,&row.CaseID,&row.CaseStatus,
-			&row.RuleID,&row.Title,&row.Summary,&row.Severity,&row.CreatedAt,&raw); err != nil {
-			writeErr(w, 503, "SOC queue read failed"); return
+		if err := rows.Scan(&row.ID, &row.EventID, &row.CaseID, &row.CaseStatus,
+			&row.RuleID, &row.Title, &row.Summary, &row.Severity, &row.CreatedAt, &raw); err != nil {
+			writeErr(w, 503, "SOC queue read failed")
+			return
 		}
 		if err := json.Unmarshal(raw, &row.AssetIDs); err != nil {
-			writeErr(w, 503, "SOC queue asset data invalid"); return
+			writeErr(w, 503, "SOC queue asset data invalid")
+			return
 		}
 		row.NeedsCase = row.CaseID == 0
 		row.Priority = socPriority(row.Severity, row.NeedsCase)
-		items = append(items,row)
+		items = append(items, row)
 	}
-	if rows.Err() != nil { writeErr(w,503,"SOC queue iteration failed"); return }
-	w.Header().Set("Cache-Control","no-store")
-	writeJSON(w, 200, map[string]any{"alerts":items,
-		"note":"Priority is a deterministic review ordering based on rule severity and case assignment, not a probability of attack. No action is executed."})
+	if rows.Err() != nil {
+		writeErr(w, 503, "SOC queue iteration failed")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"alerts": items,
+		"note": "Priority is a deterministic review ordering based on rule severity and case assignment, not a probability of attack. No action is executed."})
 }
 
 func (s *Server) defenseSOCHealth(w http.ResponseWriter, r *http.Request) {
-	if !s.defenseMode(w) { return }
+	if !s.defenseMode(w) {
+		return
+	}
 	pg := s.pg(w)
-	if pg == nil { return }
+	if pg == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 	defer cancel()
 	var recentEvents5m, recentEvents1h, recentAlerts5m, recentAlerts1h int64
@@ -209,44 +227,55 @@ func (s *Server) defenseSOCHealth(w http.ResponseWriter, r *http.Request) {
 		SELECT count(*) FILTER (WHERE ingested_at>now()-interval '5 minutes'),
 		       count(*)
 		FROM defense_events WHERE ingested_at>now()-interval '1 hour'`).
-		Scan(&recentEvents5m,&recentEvents1h); err != nil {
-		writeErr(w,503,"SOC ingress metrics unavailable");return
+		Scan(&recentEvents5m, &recentEvents1h); err != nil {
+		writeErr(w, 503, "SOC ingress metrics unavailable")
+		return
 	}
 	if err := pg.QueryRowContext(ctx, `
 		SELECT count(*) FILTER (WHERE created_at>now()-interval '5 minutes'),
 		       count(*) FROM defense_alerts WHERE created_at>now()-interval '1 hour'`).
-		Scan(&recentAlerts5m,&recentAlerts1h); err != nil {
-		writeErr(w,503,"SOC alert metrics unavailable");return
+		Scan(&recentAlerts5m, &recentAlerts1h); err != nil {
+		writeErr(w, 503, "SOC alert metrics unavailable")
+		return
 	}
 	var lastIngest, lastObserved sql.NullTime
 	var lastSource sql.NullString
 	err := pg.QueryRowContext(ctx, `
 		SELECT ingested_at,observed_at,source FROM defense_events
-		ORDER BY ingested_at DESC,id DESC LIMIT 1`).Scan(&lastIngest,&lastObserved,&lastSource)
-	if err != nil && !errors.Is(err,sql.ErrNoRows) {
-		writeErr(w,503,"SOC sensor freshness unavailable");return
+		ORDER BY ingested_at DESC,id DESC LIMIT 1`).Scan(&lastIngest, &lastObserved, &lastSource)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		writeErr(w, 503, "SOC sensor freshness unavailable")
+		return
 	}
 	type sourceMetric struct {
-		Source string `json:"source"`
-		EventsLastHour int64 `json:"events_last_hour"`
-		LastIngest time.Time `json:"last_ingest"`
+		Source         string    `json:"source"`
+		EventsLastHour int64     `json:"events_last_hour"`
+		LastIngest     time.Time `json:"last_ingest"`
 	}
-	sources := make([]sourceMetric,0,4)
-	rows,err := pg.QueryContext(ctx, `
+	sources := make([]sourceMetric, 0, 4)
+	rows, err := pg.QueryContext(ctx, `
 		SELECT source,count(*),max(ingested_at) FROM defense_events
 		WHERE ingested_at>now()-interval '1 hour'
 		GROUP BY source ORDER BY source LIMIT 4`)
-	if err != nil {writeErr(w,503,"SOC source metrics unavailable");return}
+	if err != nil {
+		writeErr(w, 503, "SOC source metrics unavailable")
+		return
+	}
 	for rows.Next() {
 		var item sourceMetric
-		if err := rows.Scan(&item.Source,&item.EventsLastHour,&item.LastIngest);err!=nil{
-			rows.Close();writeErr(w,503,"SOC source metrics scan failed");return
+		if err := rows.Scan(&item.Source, &item.EventsLastHour, &item.LastIngest); err != nil {
+			rows.Close()
+			writeErr(w, 503, "SOC source metrics scan failed")
+			return
 		}
-		sources=append(sources,item)
+		sources = append(sources, item)
 	}
-	scanErr:=rows.Err()
+	scanErr := rows.Err()
 	rows.Close()
-	if scanErr!=nil {writeErr(w,503,"SOC source metrics failed");return}
+	if scanErr != nil {
+		writeErr(w, 503, "SOC source metrics failed")
+		return
+	}
 	// Last observed and last ingested timestamps are shown separately. A
 	// skewed sensor clock can yield a negative lag; never clamp or hide it.
 	var skewSeconds any
@@ -257,23 +286,25 @@ func (s *Server) defenseSOCHealth(w http.ResponseWriter, r *http.Request) {
 		lastIngress = lastIngest.Time
 		lastSensorAt = lastObserved.Time
 		skewSeconds = lastIngest.Time.Sub(lastObserved.Time).Seconds()
-		stale = time.Since(lastIngest.Time)>5*time.Minute
+		stale = time.Since(lastIngest.Time) > 5*time.Minute
 	}
 	// If nothing has ever been ingested, "no recent events" cannot prove the
 	// collector is down. Surface unknown rather than claiming an outage.
 	health := "unknown"
 	if lastIngest.Valid {
 		health = "receiving"
-		if stale {health="no_recent_ingest"}
+		if stale {
+			health = "no_recent_ingest"
+		}
 	}
-	w.Header().Set("Cache-Control","no-store")
-	writeJSON(w,200,map[string]any{
-		"as_of":time.Now().UTC(),
-		"ingest_state":health,"last_ingested_at":lastIngress,"last_observed_at":lastSensorAt,
-		"last_source":strings.TrimSpace(lastSource.String),"sensor_clock_lag_seconds":skewSeconds,
-		"events_last_5m":recentEvents5m,"events_last_hour":recentEvents1h,
-		"alerts_last_5m":recentAlerts5m,"alerts_last_hour":recentAlerts1h,
-		"sources":sources,"freshness_threshold_seconds":300,
-		"note":"No recent ingest is not proof a sensor is down. Sensor clocks can differ; observations remain unverified.",
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{
+		"as_of":        time.Now().UTC(),
+		"ingest_state": health, "last_ingested_at": lastIngress, "last_observed_at": lastSensorAt,
+		"last_source": strings.TrimSpace(lastSource.String), "sensor_clock_lag_seconds": skewSeconds,
+		"events_last_5m": recentEvents5m, "events_last_hour": recentEvents1h,
+		"alerts_last_5m": recentAlerts5m, "alerts_last_hour": recentAlerts1h,
+		"sources": sources, "freshness_threshold_seconds": 300,
+		"note": "No recent ingest is not proof a sensor is down. Sensor clocks can differ; observations remain unverified.",
 	})
 }
