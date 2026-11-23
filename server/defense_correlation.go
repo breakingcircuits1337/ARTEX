@@ -22,7 +22,7 @@ type correlatedEvent struct {
 	ID          int64
 	Source      string
 	CollectorID sql.NullInt64
-	CompanyID sql.NullInt64
+	CompanyID   sql.NullInt64
 	Kind        string
 	SrcIP       string
 	DstIP       string

@@ -165,9 +165,9 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Name   string `json:"name"`
-		Source string `json:"source"`
-		CompanyID int64 `json:"company_id"`
+		Name      string `json:"name"`
+		Source    string `json:"source"`
+		CompanyID int64  `json:"company_id"`
 	}
 	if !decodeDefenseWorkflow(w, r, &input) {
 		return
@@ -182,12 +182,21 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "unsupported collector source")
 		return
 	}
-	if input.CompanyID <= 0 { writeErr(w,400,"company_id is required for new collector enrollment"); return }
+	if input.CompanyID <= 0 {
+		writeErr(w, 400, "company_id is required for new collector enrollment")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var companyExists bool
-	if err := pg.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`, input.CompanyID).Scan(&companyExists); err != nil { writeErr(w,503,"company scope lookup unavailable"); return }
-	if !companyExists { writeErr(w,400,"company_id does not identify an existing company"); return }
+	if err := pg.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`, input.CompanyID).Scan(&companyExists); err != nil {
+		writeErr(w, 503, "company scope lookup unavailable")
+		return
+	}
+	if !companyExists {
+		writeErr(w, 400, "company_id does not identify an existing company")
+		return
+	}
 	tx, err := pg.BeginTx(ctx, nil)
 	if err != nil {
 		writeErr(w, 503, "collector store unavailable")
@@ -245,13 +254,13 @@ func (s *Server) collectorList(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type item struct {
-		ID      int64      `json:"id"`
-		Name    string     `json:"name"`
-		Source  string     `json:"source"`
-		CompanyID *int64 `json:"company_id"`
-		Created time.Time  `json:"created_at"`
-		Rotated *time.Time `json:"rotated_at"`
-		Revoked *time.Time `json:"revoked_at"`
+		ID        int64      `json:"id"`
+		Name      string     `json:"name"`
+		Source    string     `json:"source"`
+		CompanyID *int64     `json:"company_id"`
+		Created   time.Time  `json:"created_at"`
+		Rotated   *time.Time `json:"rotated_at"`
+		Revoked   *time.Time `json:"revoked_at"`
 	}
 	out := make([]item, 0)
 	for rows.Next() {
@@ -346,27 +355,64 @@ func (s *Server) collectorRevoke(w http.ResponseWriter, r *http.Request) {
 
 // collectorBindScope binds a migrated unscoped collector only once. Already
 // ingested events retain their original NULL company (no inferred ownership).
-func (s *Server) collectorBindScope(w http.ResponseWriter,r *http.Request) {
- if !s.defenseMode(w) { return }
- pg:=s.pg(w); if pg==nil {return}
- id,ok:=workflowID(w,r); if !ok {return}
- var input struct { CompanyID int64 `json:"company_id"` }
- if !decodeDefenseWorkflow(w,r,&input) {return}
- if input.CompanyID<=0 {writeErr(w,400,"valid company_id required");return}
- ctx,cancel:=context.WithTimeout(r.Context(),5*time.Second);defer cancel()
- tx,err:=pg.BeginTx(ctx,nil);if err!=nil{writeErr(w,503,"scope database unavailable");return};defer tx.Rollback()
- var exists bool
- if err:=tx.QueryRowContext(ctx,`SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`,input.CompanyID).Scan(&exists);err!=nil{writeErr(w,503,"company lookup unavailable");return}
- if !exists {writeErr(w,400,"company does not exist");return}
- var updatedID int64
- if err:=tx.QueryRowContext(ctx,`UPDATE defense_collectors SET company_id=$1
- WHERE id=$2 AND company_id IS NULL AND revoked_at IS NULL RETURNING id`,input.CompanyID,id).Scan(&updatedID);err!=nil{
-  if errors.Is(err,sql.ErrNoRows){writeErr(w,409,"collector already bound or unavailable; create another identity to change scope");return}
-  writeErr(w,503,"collector binding unavailable");return
- }
- if _,err:=tx.ExecContext(ctx,`INSERT INTO defense_collector_audit(collector_id,operation,actor)
- VALUES($1,'bound',$2)`,updatedID,s.approver(r));err!=nil{writeErr(w,503,"collector audit unavailable");return}
- if err:=tx.Commit();err!=nil{writeErr(w,503,"collector scope commit failed");return}
- w.Header().Set("Cache-Control","no-store")
- writeJSON(w,200,map[string]any{"id":updatedID,"company_id":input.CompanyID,"note":"Existing unscoped events are not reassigned. Binding cannot be changed."})
+func (s *Server) collectorBindScope(w http.ResponseWriter, r *http.Request) {
+	if !s.defenseMode(w) {
+		return
+	}
+	pg := s.pg(w)
+	if pg == nil {
+		return
+	}
+	id, ok := workflowID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		CompanyID int64 `json:"company_id"`
+	}
+	if !decodeDefenseWorkflow(w, r, &input) {
+		return
+	}
+	if input.CompanyID <= 0 {
+		writeErr(w, 400, "valid company_id required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	tx, err := pg.BeginTx(ctx, nil)
+	if err != nil {
+		writeErr(w, 503, "scope database unavailable")
+		return
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`, input.CompanyID).Scan(&exists); err != nil {
+		writeErr(w, 503, "company lookup unavailable")
+		return
+	}
+	if !exists {
+		writeErr(w, 400, "company does not exist")
+		return
+	}
+	var updatedID int64
+	if err := tx.QueryRowContext(ctx, `UPDATE defense_collectors SET company_id=$1
+ WHERE id=$2 AND company_id IS NULL AND revoked_at IS NULL RETURNING id`, input.CompanyID, id).Scan(&updatedID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, 409, "collector already bound or unavailable; create another identity to change scope")
+			return
+		}
+		writeErr(w, 503, "collector binding unavailable")
+		return
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO defense_collector_audit(collector_id,operation,actor)
+ VALUES($1,'bound',$2)`, updatedID, s.approver(r)); err != nil {
+		writeErr(w, 503, "collector audit unavailable")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 503, "collector scope commit failed")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"id": updatedID, "company_id": input.CompanyID, "note": "Existing unscoped events are not reassigned. Binding cannot be changed."})
 }

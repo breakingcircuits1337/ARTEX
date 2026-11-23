@@ -20,9 +20,9 @@ const maxDefenseBatch = 50
 const maxDefenseBody = 1 << 20
 
 type defenseBatch struct {
-	Source string            `json:"source"`
-	CompanyID int64          `json:"company_id,omitempty"`
-	Events []json.RawMessage `json:"events"`
+	Source    string            `json:"source"`
+	CompanyID int64             `json:"company_id,omitempty"`
+	Events    []json.RawMessage `json:"events"`
 }
 
 func decodeDefenseBatchWithScope(r io.Reader, now time.Time) ([]defense.SecurityEvent, int64, error) {
@@ -36,7 +36,9 @@ func decodeDefenseBatchWithScope(r io.Reader, now time.Time) ([]defense.Security
 	if err := d.Decode(&extra); err != io.EOF {
 		return nil, 0, errors.New("trailing JSON is not allowed")
 	}
-	if input.CompanyID < 0 { return nil, 0, errors.New("company_id must be nonnegative") }
+	if input.CompanyID < 0 {
+		return nil, 0, errors.New("company_id must be nonnegative")
+	}
 	if len(input.Events) < 1 || len(input.Events) > maxDefenseBatch {
 		return nil, 0, errors.New("events must contain 1..50 entries")
 	}
@@ -52,8 +54,8 @@ func decodeDefenseBatchWithScope(r io.Reader, now time.Time) ([]defense.Security
 }
 
 func decodeDefenseBatch(r io.Reader, now time.Time) ([]defense.SecurityEvent, error) {
- events, _, err := decodeDefenseBatchWithScope(r,now)
- return events,err
+	events, _, err := decodeDefenseBatchWithScope(r, now)
+	return events, err
 }
 
 func (s *Server) defenseMode(w http.ResponseWriter) bool {
@@ -85,8 +87,14 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 401, "invalid collector credential")
 			return
 		}
-		if requestedCompanyID != 0 { writeErr(w,403,"collector cannot select another company"); return }
-		if !collector.CompanyID.Valid { writeErr(w,409,"collector has no assigned company; bind its scope before ingestion"); return }
+		if requestedCompanyID != 0 {
+			writeErr(w, 403, "collector cannot select another company")
+			return
+		}
+		if !collector.CompanyID.Valid {
+			writeErr(w, 409, "collector has no assigned company; bind its scope before ingestion")
+			return
+		}
 		for _, e := range events {
 			if e.Source != collector.Source {
 				writeErr(w, 403, "collector source scope mismatch")
@@ -131,11 +139,15 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 	// absent scope is kept NULL and cannot link to any inventory asset.
 	if collector == nil && requestedCompanyID > 0 {
 		var exists bool
-		if err := tx.QueryRowContext(ctx,`SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`,requestedCompanyID).Scan(&exists);err != nil {
-			writeErr(w,503,"company scope lookup unavailable");return
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`, requestedCompanyID).Scan(&exists); err != nil {
+			writeErr(w, 503, "company scope lookup unavailable")
+			return
 		}
-		if !exists {writeErr(w,400,"unknown company_id");return}
-		companyID = sql.NullInt64{Int64:requestedCompanyID,Valid:true}
+		if !exists {
+			writeErr(w, 400, "unknown company_id")
+			return
+		}
+		companyID = sql.NullInt64{Int64: requestedCompanyID, Valid: true}
 	}
 	ingested, duplicates, alertCount, linked := 0, 0, 0, 0
 	emergencyActionIDs := make([]int64, 0, 4)
@@ -173,7 +185,7 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		if collector != nil {
 			correlationKey = fmt.Sprintf("collector:%d:%s", collector.ID, correlationKey)
 		} else if companyID.Valid {
-			correlationKey = fmt.Sprintf("company:%d:%s",companyID.Int64,correlationKey)
+			correlationKey = fmt.Sprintf("company:%d:%s", companyID.Int64, correlationKey)
 		}
 		for _, hit := range defense.EvaluateEvent(e) {
 			created, err := insertDefenseAlert(ctx, tx, id, correlationKey, e.ObservedAt, hit, assetJSON)
@@ -305,12 +317,17 @@ func defenseLimit(r *http.Request) int {
 
 // This is an admin-console filter, NOT tenant RBAC. All API callers still
 // authenticate as the single privileged operator; no tenant-user roles exist.
-func defenseCompanyFilter(w http.ResponseWriter,r *http.Request) (int64,bool) {
- raw:=r.URL.Query().Get("company_id")
- if raw=="" {return 0,true}
- id,err:=strconv.ParseInt(raw,10,64)
- if err!=nil || id<=0 {writeErr(w,400,"company_id must be a positive integer");return 0,false}
- return id,true
+func defenseCompanyFilter(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.URL.Query().Get("company_id")
+	if raw == "" {
+		return 0, true
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, 400, "company_id must be a positive integer")
+		return 0, false
+	}
+	return id, true
 }
 
 func (s *Server) listDefenseEvents(w http.ResponseWriter, r *http.Request) {
@@ -322,7 +339,10 @@ func (s *Server) listDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	scope,ok:=defenseCompanyFilter(w,r);if !ok{return}
+	scope, ok := defenseCompanyFilter(w, r)
+	if !ok {
+		return
+	}
 	rows, err := pg.QueryContext(r.Context(), `
   SELECT id,source,external_id,observed_at,kind,outcome,src_ip,dst_ip,host,username,signature,severity,
          CASE WHEN company_id IS NOT NULL THEN asset_ids ELSE '[]'::jsonb END,
@@ -330,7 +350,7 @@ func (s *Server) listDefenseEvents(w http.ResponseWriter, r *http.Request) {
   FROM defense_events
   WHERE ($2::bigint=0 OR company_id=$2::bigint)
   ORDER BY observed_at DESC,id DESC LIMIT $1
- `, defenseLimit(r),scope)
+ `, defenseLimit(r), scope)
 	if err != nil {
 		writeErr(w, 503, "telemetry database unavailable")
 		return
@@ -343,17 +363,21 @@ func (s *Server) listDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		var t time.Time
 		var severity int
 		var assetJSON []byte
-		var companyID,collectorID sql.NullInt64
+		var companyID, collectorID sql.NullInt64
 		if err := rows.Scan(&id, &source, &key, &t, &kind, &outcome, &src, &dst, &host, &user, &signature, &severity, &assetJSON, &companyID, &collectorID); err != nil {
 			writeErr(w, 503, "telemetry read failed")
 			return
 		}
 		var assets []int64
 		_ = json.Unmarshal(assetJSON, &assets)
-		var company,collector any
-		if companyID.Valid{company=companyID.Int64}
-		if collectorID.Valid{collector=collectorID.Int64}
-		events = append(events, map[string]any{"id": id, "source": source, "external_id": key, "observed_at": t, "kind": kind, "outcome": outcome, "src_ip": src, "dst_ip": dst, "host": host, "username": user, "signature": signature, "severity": severity, "asset_ids": assets, "company_id":company, "collector_id":collector})
+		var company, collector any
+		if companyID.Valid {
+			company = companyID.Int64
+		}
+		if collectorID.Valid {
+			collector = collectorID.Int64
+		}
+		events = append(events, map[string]any{"id": id, "source": source, "external_id": key, "observed_at": t, "kind": kind, "outcome": outcome, "src_ip": src, "dst_ip": dst, "host": host, "username": user, "signature": signature, "severity": severity, "asset_ids": assets, "company_id": company, "collector_id": collector})
 	}
 	if err := rows.Err(); err != nil {
 		writeErr(w, 503, "telemetry read failed")
@@ -371,7 +395,10 @@ func (s *Server) listDefenseAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	scope,ok:=defenseCompanyFilter(w,r);if !ok{return}
+	scope, ok := defenseCompanyFilter(w, r)
+	if !ok {
+		return
+	}
 	rows, err := pg.QueryContext(r.Context(), `
   SELECT a.id,a.rule_id,a.title,a.severity,a.summary,a.event_id,a.created_at,
          CASE WHEN e.company_id IS NOT NULL THEN a.asset_ids ELSE '[]'::jsonb END,
@@ -379,7 +406,7 @@ func (s *Server) listDefenseAlerts(w http.ResponseWriter, r *http.Request) {
   FROM defense_alerts a JOIN defense_events e ON e.id=a.event_id
   WHERE ($2::bigint=0 OR e.company_id=$2::bigint)
   ORDER BY a.created_at DESC,a.id DESC LIMIT $1
- `, defenseLimit(r),scope)
+ `, defenseLimit(r), scope)
 	if err != nil {
 		writeErr(w, 503, "alert database unavailable")
 		return
@@ -391,17 +418,21 @@ func (s *Server) listDefenseAlerts(w http.ResponseWriter, r *http.Request) {
 		var rule, title, severity, summary string
 		var t time.Time
 		var raw []byte
-		var companyID,collectorID sql.NullInt64
+		var companyID, collectorID sql.NullInt64
 		if err := rows.Scan(&id, &rule, &title, &severity, &summary, &eventID, &t, &raw, &companyID, &collectorID); err != nil {
 			writeErr(w, 503, "alert read failed")
 			return
 		}
 		var assetIDs []int64
 		_ = json.Unmarshal(raw, &assetIDs)
-		var company,collector any
-		if companyID.Valid{company=companyID.Int64}
-		if collectorID.Valid{collector=collectorID.Int64}
-		alerts = append(alerts, map[string]any{"id": id, "rule_id": rule, "title": title, "severity": severity, "summary": summary, "event_id": eventID, "created_at": t, "asset_ids": assetIDs, "company_id":company, "collector_id":collector})
+		var company, collector any
+		if companyID.Valid {
+			company = companyID.Int64
+		}
+		if collectorID.Valid {
+			collector = collectorID.Int64
+		}
+		alerts = append(alerts, map[string]any{"id": id, "rule_id": rule, "title": title, "severity": severity, "summary": summary, "event_id": eventID, "created_at": t, "asset_ids": assetIDs, "company_id": company, "collector_id": collector})
 	}
 	if err := rows.Err(); err != nil {
 		writeErr(w, 503, "alert read failed")
@@ -419,18 +450,21 @@ func (s *Server) defenseSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	scope,ok:=defenseCompanyFilter(w,r);if !ok{return}
+	scope, ok := defenseCompanyFilter(w, r)
+	if !ok {
+		return
+	}
 	var events, alerts, linked int64
 	err := pg.QueryRowContext(r.Context(), `SELECT count(*),
 	 count(*) FILTER (WHERE company_id IS NOT NULL AND jsonb_array_length(asset_ids)>0)
-	 FROM defense_events WHERE ($1::bigint=0 OR company_id=$1::bigint)`,scope).Scan(&events, &linked)
+	 FROM defense_events WHERE ($1::bigint=0 OR company_id=$1::bigint)`, scope).Scan(&events, &linked)
 	if err != nil {
 		writeErr(w, 503, "telemetry summary unavailable")
 		return
 	}
 	if err = pg.QueryRowContext(r.Context(), `SELECT count(*) FROM defense_alerts a
 	JOIN defense_events e ON e.id=a.event_id
-	WHERE ($1::bigint=0 OR e.company_id=$1::bigint)`,scope).Scan(&alerts); err != nil {
+	WHERE ($1::bigint=0 OR e.company_id=$1::bigint)`, scope).Scan(&alerts); err != nil {
 		writeErr(w, 503, "alert summary unavailable")
 		return
 	}

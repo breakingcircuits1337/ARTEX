@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -105,7 +105,9 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	}
 	name := fmt.Sprintf("pr10-%d", time.Now().UnixNano())
 	var companyID int64
-	if err := m.pg.QueryRow(`INSERT INTO companies(name,nkey) VALUES($1,$2) RETURNING id`, name, name).Scan(&companyID); err != nil { t.Fatal(err) }
+	if err := m.pg.QueryRow(`INSERT INTO companies(name,nkey) VALUES($1,$2) RETURNING id`, name, name).Scan(&companyID); err != nil {
+		t.Fatal(err)
+	}
 	create := invoke("/api/defense/collectors", "Bearer "+admin,
 		fmt.Sprintf(`{"name":"%s","source":"generic","company_id":%d}`, name, companyID), 0)
 	if create.Code != http.StatusCreated {
@@ -122,8 +124,8 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 		t.Fatal("missing token")
 	}
 	var scopedCompany sql.NullInt64
-	if err := m.pg.QueryRow(`SELECT company_id FROM defense_collectors WHERE id=$1`,c.ID).Scan(&scopedCompany); err != nil || !scopedCompany.Valid || scopedCompany.Int64 != companyID {
-		t.Fatalf("collector scope unexpected %v err=%v",scopedCompany,err)
+	if err := m.pg.QueryRow(`SELECT company_id FROM defense_collectors WHERE id=$1`, c.ID).Scan(&scopedCompany); err != nil || !scopedCompany.Valid || scopedCompany.Int64 != companyID {
+		t.Fatalf("collector scope unexpected %v err=%v", scopedCompany, err)
 	}
 	var hash string
 	if err := m.pg.QueryRow(`SELECT token_hash FROM defense_collectors WHERE id=$1`, c.ID).Scan(&hash); err != nil {
@@ -147,7 +149,7 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	wrong := feed(c.Token, `{"source":"wazuh","events":[{"kind":"other"}]}`)
 	spoofedCompany := feed(c.Token, `{"source":"generic","company_id":999,"events":[{"kind":"other"}]}`)
 	if spoofedCompany.Code != http.StatusForbidden {
-		t.Fatalf("collector spoofed company accepted: %d",spoofedCompany.Code)
+		t.Fatalf("collector spoofed company accepted: %d", spoofedCompany.Code)
 	}
 	if wrong.Code != 403 {
 		t.Fatalf("cross-source post status=%d", wrong.Code)
