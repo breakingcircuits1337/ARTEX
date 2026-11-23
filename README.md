@@ -39,6 +39,13 @@ justify it, and every autonomous action passes through scope rules, approval gat
 - **Self-hosted and model-agnostic.** One Go binary with the Next.js UI embedded, PostgreSQL,
   your own Anthropic/OpenAI-compatible endpoint, or a local Ollama.
 
+**ARTEX Defense (opt-in preview):** set `ARTEX_MODE=defense` to enable
+Phase 1 passive exposure triage and Phase 2 authenticated security telemetry,
+deterministic alert signals, asset links, and the read-only SOC page.
+See [Phase 1](docs/DEFENSE_PHASE1.md) and [Phase 2](docs/DEFENSE_PHASE2.md).
+This mode is a defensive prototype; it does not guarantee network isolation or
+production-safe autonomous incident response.
+
 ---
 
 ## Quick start
