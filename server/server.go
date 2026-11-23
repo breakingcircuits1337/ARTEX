@@ -781,6 +781,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
 	mux.HandleFunc("GET /api/defense/alerts", s.listDefenseAlerts)
 	mux.HandleFunc("GET /api/defense/summary", s.defenseSummary)
+	// Phase 8: authenticated read-only, near-real-time SOC monitoring.
+	mux.HandleFunc("GET /api/defense/live", s.defenseLive)
+	mux.HandleFunc("GET /api/defense/soc/queue", s.defenseSOCQueue)
+	mux.HandleFunc("GET /api/defense/soc/health", s.defenseSOCHealth)
 	// Curated alert-only detector metadata and manual rule-file export.
 	mux.HandleFunc("GET /api/defense/detection-pack", s.defenseDetectionCatalog)
 	mux.HandleFunc("GET /api/defense/detection-pack/{engine}", s.defenseDetectionDownload)

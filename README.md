@@ -46,6 +46,7 @@ See [Phase 1](docs/DEFENSE_PHASE1.md), [Phase 2](docs/DEFENSE_PHASE2.md), and [P
 Phase 5 supplies a curated [alert-only detection pack](docs/DEFENSE_DETECTION_PACK.md) for operator-managed Suricata/YARA sensors; no rules are deployed automatically.
 Phase 6 adds an [evidence-linked threat correlation graph, ATT&CK hypotheses, and incident timelines](docs/DEFENSE_PHASE6.md) to existing defensive cases; graph relationships never authorize automatic containment.
 Phase 7 adds [autonomous evidence-only case investigation and human review](docs/DEFENSE_PHASE7.md), with opt-in high/critical case intake, durable worker queues, pause/cancel controls and immutable reviewer verdicts.
+Phase 8 adds [near-real-time SOC monitoring](docs/DEFENSE_PHASE8.md): authenticated streaming watermarks, sensor-ingestion health, prioritized human review, and polling fallback—without modifying autonomous containment.
 This mode is a defensive prototype; it does not guarantee network isolation or
 production-safe autonomous incident response.
 
