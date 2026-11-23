@@ -36,3 +36,15 @@ jobs:
           go-version-file: go.mod
       - name: Test the catalog without activating a sensor
         run: go test ./detectionpack
+
+  full-go-compilation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Compile all ARTEX packages without relaxing formatting checks
+        run: go build ./...
+      - name: Run defense and catalog unit tests
+        run: go test ./detectionpack ./defense
