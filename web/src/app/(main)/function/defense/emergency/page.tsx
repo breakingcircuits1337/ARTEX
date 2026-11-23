@@ -249,7 +249,7 @@ export default function EmergencyContainmentPage() {
               <CardContent className={status.armed ? "font-semibold text-amber-500" : "font-semibold"}>
                 {status.armed ? "ARMED" : "DISARMED / PAUSED"}
               </CardContent></Card>
-            <Card><CardHeader><CardTitle className="text-sm">Kernel/pending actions</CardTitle></CardHeader>
+            <Card><CardHeader><CardTitle className="text-sm">Active or uncertain actions</CardTitle></CardHeader>
               <CardContent className="text-3xl font-semibold">{status.active}</CardContent></Card>
             <Card><CardHeader><CardTitle className="text-sm">Action history</CardTitle></CardHeader>
               <CardContent className="text-3xl font-semibold">{status.action_count}</CardContent></Card>
