@@ -9,6 +9,7 @@ import (
  "fmt"
  "net"
  "strings"
+ "strconv"
  "time"
 
  "github.com/Autumn-27/artex/detectionpack"
@@ -30,6 +31,7 @@ type SecurityEvent struct {
  Signature string `json:"signature,omitempty"`
  Severity int `json:"severity"`
  VendorAlert bool `json:"vendor_alert"`
+ CuratedRuleID string `json:"curated_rule_id,omitempty"`
 }
 
 // String fields are treated as untrusted, and bounded before database insertion.
@@ -141,6 +143,14 @@ func NormalizeEvent(source string, raw json.RawMessage, now time.Time) (Security
   if e.Action=="alert" {
    e.VendorAlert=true
    switch nestedNumber(m,"alert","severity") {case 1:e.Severity=9;case 2:e.Severity=7;case 3:e.Severity=5;default:e.Severity=3}
+   // Imported curated SID matches are always alert-only even when an
+   // upstream source advertises critical severity. A later emergency
+   // engine must not interpret them as vendor-blocking authorization.
+   sid := strconv.Itoa(nestedNumber(m,"alert","signature_id"))
+   if rule,ok:=detectionpack.LookupRule("suricata",sid);ok {
+    e.CuratedRuleID=rule.ID
+    e.VendorAlert=false
+   }
   }
  case "wazuh":
   level:=nestedNumber(m,"rule","level")
@@ -165,6 +175,17 @@ func NormalizeEvent(source string, raw json.RawMessage, now time.Time) (Security
 // RuleHit is a deterministic signal, not a verified security incident.
 type RuleHit struct {RuleID,Title,Severity,Summary string}
 func EvaluateEvent(e SecurityEvent) []RuleHit {
+ if e.Source=="suricata" && e.CuratedRuleID!="" {
+  if rule,ok:=detectionpack.LookupRule("suricata",e.CuratedRuleID);ok {
+   return []RuleHit{{
+    RuleID:"curated_suricata_"+rule.ID,
+    Title:"Curated Suricata detection (alert-only)",
+    Severity:rule.Severity,
+    Summary:"Sensor reported reviewed SID "+rule.ID+
+     ". This detection is not a confirmed intrusion and must never authorize automated containment.",
+   }}
+  }
+ }
  // An authorized YARA scanner may submit a generic endpoint observation
  // naming a curated signature. Neither the report nor the rule name
  // grants permission for live scanning or automated containment.
