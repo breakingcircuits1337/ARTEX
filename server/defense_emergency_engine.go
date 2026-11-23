@@ -219,11 +219,12 @@ func (s *Server) applyEmergencyAction(id int64) {
 	// alert; however, previously applied and still-live kernel entries can
 	// be reconciled safely after a restart.
 	if now.Sub(created) > 15*time.Second {
-		if checkErr := adapter.Check(ctx); checkErr != nil || !adapter.present(ctx, source) {
-			runErr = errors.New("decision became stale before enforcement")
-		}
+		// Do not generate delayed blocks after a restart. If the gateway
+		// applied before a crash, its kernel TTL remains the failsafe and
+		// the operator can still undo this uncertain ledger row.
+		runErr = errors.New("decision became stale before enforcement")
 	} else {
-		runErr = adapter.Apply(ctx, source, time.Until(expires))
+		runErr = adapter.Apply(ctx, source, destination, time.Until(expires))
 	}
 	if runErr != nil {
 		if err := updateEmergencyState(ctx, tx, id, "failed",
