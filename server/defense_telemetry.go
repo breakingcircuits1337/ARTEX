@@ -57,6 +57,7 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter,r *http.Request) {
  if err!=nil {writeErr(w,503,"telemetry database unavailable");return}
  defer tx.Rollback()
  ingested,duplicates,alertCount,linked:=0,0,0,0
+ emergencyActionIDs := make([]int64, 0, 4)
  for _,e:=range events {
   ids,err:=linkedDefenseAssets(ctx,tx,e)
   if err!=nil {writeErr(w,503,"asset correlation unavailable");return}
@@ -96,9 +97,19 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter,r *http.Request) {
     if created {alertCount++}
    }
   }
+  // Machine-speed fast path: deterministic corroboration and admission are
+  // recorded in the same transaction as the source event. Never call the
+  // firewall before the event + audit record commits.
+  actionID,autoErr:=s.stageEmergencyAction(ctx,tx,e,id,time.Now())
+  if autoErr!=nil {writeErr(w,503,"emergency admission unavailable");return}
+  if actionID>0 {emergencyActionIDs=append(emergencyActionIDs,actionID)}
  }
  if err:=tx.Commit();err!=nil {writeErr(w,503,"telemetry commit failed");return}
- writeJSON(w,http.StatusOK,map[string]any{"ingested":ingested,"duplicates":duplicates,"alerts_created":alertCount,"events_linked":linked})
+ // Apply immediately after commit; no LLM, manual queue, or polling delay.
+ // The bounded restart reconciler catches a process crash between commit
+ // and kernel enforcement. All actions remain viewable and reversible.
+ for _,actionID:=range emergencyActionIDs {s.applyEmergencyAction(actionID)}
+ writeJSON(w,http.StatusOK,map[string]any{"ingested":ingested,"duplicates":duplicates,"alerts_created":alertCount,"events_linked":linked,"emergency_actions_queued":len(emergencyActionIDs)})
 }
 
 // Correlates only to existing inventory. No reverse lookup, scan or HTTP call.
