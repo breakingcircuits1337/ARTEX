@@ -44,6 +44,7 @@ Phase 1 passive exposure triage and Phase 2 authenticated security telemetry,
 deterministic alert signals, asset links, and the read-only SOC page.
 See [Phase 1](docs/DEFENSE_PHASE1.md), [Phase 2](docs/DEFENSE_PHASE2.md), and [Phase 3: incident response review](docs/DEFENSE_PHASE3.md) and [Emergency Auto-Containment](docs/DEFENSE_EMERGENCY.md).
 Phase 5 supplies a curated [alert-only detection pack](docs/DEFENSE_DETECTION_PACK.md) for operator-managed Suricata/YARA sensors; no rules are deployed automatically.
+Phase 6 adds an [evidence-linked threat correlation graph, ATT&CK hypotheses, and incident timelines](docs/DEFENSE_PHASE6.md) to existing defensive cases; graph relationships never authorize automatic containment.
 This mode is a defensive prototype; it does not guarantee network isolation or
 production-safe autonomous incident response.
 
