@@ -166,9 +166,9 @@ export default function EmergencyContainmentPage() {
     setError("");
     setMessage("");
     try {
-      await http(\`/defense/emergency/actions/\${action.id}/revert\`, { method: "POST" });
+      await http(`/defense/emergency/actions/${action.id}/revert`, { method: "POST" });
       await refresh();
-      setMessage(\`Action #\${action.id} reversed. Source \${action.source_ip} is suppressed for 30 minutes.\`);
+      setMessage(`Action #${action.id} reversed. Source ${action.source_ip} is suppressed for 30 minutes.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Kernel reversal not confirmed");
     } finally {
@@ -184,7 +184,7 @@ export default function EmergencyContainmentPage() {
       const result = await http<StopResult>("/defense/emergency/revert-all", { method: "POST" });
       await refresh();
       setMessage(
-        \`Emergency mode PAUSED. Reversed \${result.reverted} actions; \${result.failed} failed, \${result.remaining} remain. \` +
+        `Emergency mode PAUSED. Reversed ${result.reverted} actions; ${result.failed} failed, ${result.remaining} remain. ` +
         (result.failed || result.remaining ? "VERIFY THE GATEWAY DIRECTLY." : "All listed live actions cleared."),
       );
     } catch (reason) {
@@ -198,7 +198,7 @@ export default function EmergencyContainmentPage() {
     if (!nextCursor || !hasMore) return;
     setBusy(true);
     try {
-      const page = await http<ActionPage>(\`/defense/emergency/actions?limit=100&before_id=\${nextCursor}\`);
+      const page = await http<ActionPage>(`/defense/emergency/actions?limit=100&before_id=${nextCursor}`);
       setActions(prev => [...prev, ...page.actions.filter(item => !prev.some(a => a.id === item.id))]);
       setNextCursor(page.next_before_id);
       setHasMore(page.has_more);
