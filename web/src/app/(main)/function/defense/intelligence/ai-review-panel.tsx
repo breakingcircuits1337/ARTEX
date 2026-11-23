@@ -30,11 +30,27 @@ type AIReport = {
   findings: AIFinding[];
   note: string;
 };
+type AIPreview = {
+  packet_sha256: string;
+  no_model_call: boolean;
+  requires_fresh_consent: boolean;
+  note: string;
+  packet: {
+    schema: string;
+    alert_severity: string;
+    facts: Array<{
+      ref: string; source: string; kind: string;
+      relation: string; link_confidence: number;
+    }>;
+    interpretation: string;
+  };
+};
 function label(text: string): string { return text.replaceAll("_", " "); }
 
 export function AIReviewPanel({ caseID }: { caseID: number }) {
   const [report, setReport] = React.useState<AIReport | null>(null);
   const [consent, setConsent] = React.useState(false);
+  const [preview, setPreview] = React.useState<AIPreview | null>(null);
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -47,6 +63,8 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
   }, [caseID]);
 
   React.useEffect(() => {
+    setPreview(null);
+    setConsent(false);
     let live = true;
     void refresh().catch(e => { if (live) setError(e instanceof Error ? e.message : "AI review data unavailable"); });
     const timer = window.setInterval(() => {
@@ -57,12 +75,36 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
     return () => { live = false; window.clearInterval(timer); };
   }, [refresh]);
 
+  async function loadPreview() {
+    if (busy || !report?.enabled) return;
+    setBusy(true);
+    setPreview(null);
+    setConsent(false);
+    setError("");
+    setMessage("");
+    try {
+      const result = await http<AIPreview>(`/defense/cases/${caseID}/ai-reviews/preview`);
+      if (!result.no_model_call || !result.requires_fresh_consent ||
+          result.packet.schema !== "artex-redacted-evidence-v1" ||
+          !/^[0-9a-f]{64}$/.test(result.packet_sha256)) {
+        throw new Error("Server did not return a valid read-only evidence preview");
+      }
+      setPreview(result);
+      setMessage("Inspect the exact model-bound evidence below; no AI request was made.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to prepare evidence preview");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function requestReview() {
-    if (!consent || busy) return;
+    if (!consent || !preview || busy) return;
     if (!window.confirm(
       "Send only categorical case evidence (not raw logs, IPs, usernames or credentials) to your configured AI provider? " +
       "The model may be remote and the provider may retain requests under its own policy. " +
-      "This creates unverified advice for manual review only; it cannot execute tools or containment."
+      "This creates unverified advice for manual review only; it cannot execute tools or containment. " +
+      "The request must match preview SHA-256 " + preview.packet_sha256.slice(0, 16) + "…."
     )) return;
     setBusy(true);
     setError("");
@@ -70,7 +112,9 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
     try {
       await http(`/defense/cases/${caseID}/ai-reviews`, {
         method: "POST",
-        body: JSON.stringify({ consent_to_model: true }),
+        body: JSON.stringify({
+          consent_to_model: true, reviewed_packet_sha256: preview.packet_sha256,
+        }),
       });
       setMessage("Unverified AI suggestions saved. Review each citation and the original sensor evidence.");
       await refresh();
@@ -78,7 +122,8 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
       setError(e instanceof Error ? e.message : "AI review failed");
       await refresh().catch(() => {});
     } finally {
-      setConsent(false); // Every model call requires fresh explicit consent.
+      setConsent(false); // Every model call requires a new explicit preflight.
+      setPreview(null);
       setBusy(false);
     }
   }
@@ -111,7 +156,7 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
     <section className="mt-6 space-y-4 rounded-lg border p-4" aria-label="AI-assisted defensive investigation">
       <div className="flex items-center gap-2">
         <BrainCircuit className="size-5" />
-        <h3 className="font-semibold">AI-assisted investigation · PR #14</h3>
+        <h3 className="font-semibold">AI-assisted investigation · PR #15 evidence safety</h3>
       </div>
       <div className="rounded border border-amber-500/50 bg-amber-500/5 p-3 text-sm">
         <p className="flex items-center gap-2 font-medium">
@@ -119,7 +164,8 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
         </p>
         <p className="mt-1 text-muted-foreground">
           Only redacted categorical evidence and temporary references are sent to the configured model
-          after each explicit consent. The model has no tools. It cannot update deterministic findings,
+          after the analyst previews the exact packet and explicitly consents to that digest.
+          The model has no tools. It cannot update deterministic findings,
           change ATT&amp;CK mappings, alter the case status or authorize emergency containment.
         </p>
       </div>
@@ -133,20 +179,40 @@ export function AIReviewPanel({ caseID }: { caseID: number }) {
       )}
       {error && <p role="alert" className="rounded border border-destructive p-2 text-destructive">{error}</p>}
       {message && <p role="status" className="rounded border p-2">{message}</p>}
-      <label className="flex items-start gap-3 text-sm">
-        <input className="mt-1" type="checkbox" checked={consent} disabled={busy || !canRequest}
-          onChange={event => setConsent(event.target.checked)} />
-        <span>I approve this one request to my configured AI provider using redacted evidence.
-          I understand that an external model provider may receive the data and that its output is unverified.</span>
-      </label>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!canRequest || !consent || busy || hasRunning} onClick={() => void requestReview()}>
-          <ShieldCheck className="mr-2 size-4" /> Request read-only AI review
+        <Button disabled={!canRequest || busy || hasRunning} variant="outline"
+          onClick={() => void loadPreview()}>
+          Preview exact redacted evidence · no model call
         </Button>
         <Button disabled={busy} variant="outline" onClick={() => void refresh()}>
           <RefreshCw className="mr-2 size-4" /> Refresh
         </Button>
       </div>
+      {preview && (
+        <div className="rounded border p-3 text-sm">
+          <p className="font-medium">Evidence egress preview · SHA-256 {preview.packet_sha256}</p>
+          <p className="mt-2 text-muted-foreground">
+            These are the exact categorical JSON facts the model will receive.
+            Nothing has been sent to the model. Changes to case evidence require another preview.
+          </p>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-3 text-xs"
+            aria-label="Redacted model evidence packet">
+            {JSON.stringify(preview.packet, null, 2)}
+          </pre>
+          <p className="mt-2 text-xs text-muted-foreground">{preview.note}</p>
+        </div>
+      )}
+      <label className="flex items-start gap-3 text-sm">
+        <input className="mt-1" type="checkbox" checked={consent} disabled={busy || !canRequest || !preview}
+          onChange={event => setConsent(event.target.checked)} />
+        <span>I have reviewed this exact evidence packet and approve ONE AI request.
+          I understand that an external configured provider may receive these categorical facts
+          and retain them under its own policy. Model output remains unverified.</span>
+      </label>
+      <Button disabled={!canRequest || !consent || !preview || busy || hasRunning}
+        onClick={() => void requestReview()}>
+        <ShieldCheck className="mr-2 size-4" /> Request AI review of previewed evidence
+      </Button>
       {busy && <p role="status" className="text-muted-foreground">Waiting for the model or saving an analyst decision…</p>}
       {(report?.runs ?? []).map(run => (
         <div key={run.id} className="rounded border p-3 text-sm">

@@ -1,0 +1,74 @@
+name: ai-evidence-safety
+
+on:
+  pull_request:
+    paths:
+      - "defense/ai_advisory.go"
+      - "defense/ai_safety*.go"
+      - "server/defense_ai_advisory*.go"
+      - "server/server.go"
+      - "web/src/app/(main)/function/defense/intelligence/ai-review-panel.tsx"
+      - ".github/workflows/ai-evidence-safety.yml"
+  push:
+    branches: [main]
+    paths:
+      - "defense/ai_advisory.go"
+      - "defense/ai_safety*.go"
+      - "server/defense_ai_advisory*.go"
+      - "server/server.go"
+      - "web/src/app/(main)/function/defense/intelligence/ai-review-panel.tsx"
+      - ".github/workflows/ai-evidence-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-and-safety:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: artex
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: artextest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
+      ARTEX_DEFENSE_AI_ASSIST_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Gofmt check
+        run: |
+          files=$(gofmt -l defense/ai_advisory.go defense/ai_safety.go defense/ai_safety_test.go server/defense_ai_advisory.go server/defense_ai_advisory_test.go server/server.go)
+          if [ -n "$files" ]; then printf 'gofmt required:\n%s\n' "$files"; exit 1; fi
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Offline model safety evaluations and consent/evidence integrity
+        run: go test -count=1 ./defense ./server -run 'TestAI'
+      - name: Migration compatibility
+        run: go test -count=1 ./db -run 'TestOpenMigratesFreshDatabase'
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build:static

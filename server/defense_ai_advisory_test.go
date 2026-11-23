@@ -15,6 +15,42 @@ import (
 
 const goodAIReviewFixture = `{"summary":"This unverified alert needs human confirmation from original sensor records.","findings":[{"evidence_ref":"ev1","category":"verification_gap","explanation":"Check authorized maintenance records and validate original source evidence."}]}`
 
+// aiPreviewForTest obtains the real read-only preflight digest. This is the
+// same request an operator must inspect before consenting to model egress.
+func aiPreviewForTest(t *testing.T, s *Server, caseID int64) string {
+	t.Helper()
+	path := fmt.Sprintf("/api/defense/cases/%d/ai-reviews/preview", caseID)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.SetPathValue("id", strconv.FormatInt(caseID, 10))
+	rec := httptest.NewRecorder()
+	s.previewDefenseAIReview(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("AI preview=%d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		PacketSHA256 string `json:"packet_sha256"`
+		NoModelCall  bool   `json:"no_model_call"`
+		Packet       struct {
+			Schema string `json:"schema"`
+			Facts  []struct {
+				Ref string `json:"ref"`
+			} `json:"facts"`
+		} `json:"packet"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.PacketSHA256) != 64 || !out.NoModelCall ||
+		out.Packet.Schema != "artex-redacted-evidence-v1" ||
+		len(out.Packet.Facts) == 0 || out.Packet.Facts[0].Ref != "ev1" {
+		t.Fatalf("unsafe or incomplete preflight: %+v", out)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("preview response is cacheable")
+	}
+	return out.PacketSHA256
+}
+
 func TestAIReviewDisabledByDefaultAndAuthBoundary(t *testing.T) {
 	t.Setenv("ARTEX_MODE", "defense")
 	t.Setenv("ARTEX_DEFENSE_AI_ASSIST_ENABLED", "")
@@ -73,7 +109,8 @@ func TestAIReviewManualConsentGroundedHumanDecisionPG(t *testing.T) {
 	if modelCalls.Load() != 0 {
 		t.Fatal("AI was invoked without consent")
 	}
-	rec := post(`{"consent_to_model":true}`)
+	digest := aiPreviewForTest(t, s, caseID)
+	rec := post(fmt.Sprintf(`{"consent_to_model":true,"reviewed_packet_sha256":%q}`, digest))
 	if rec.Code != 200 {
 		t.Fatalf("AI review request %d %s", rec.Code, rec.Body.String())
 	}
@@ -148,10 +185,11 @@ func TestAIReviewRejectsFabricatedCitationAndQuotaPG(t *testing.T) {
 		calls.Add(1)
 		return strings.Replace(goodAIReviewFixture, "ev1", "ev999", 1), nil
 	}}
+	digest := aiPreviewForTest(t, s, caseID)
 	send := func() *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/defense/cases/%d/ai-reviews", caseID),
-			strings.NewReader(`{"consent_to_model":true}`))
+			strings.NewReader(fmt.Sprintf(`{"consent_to_model":true,"reviewed_packet_sha256":%q}`, digest)))
 		req.SetPathValue("id", strconv.FormatInt(caseID, 10))
 		w := httptest.NewRecorder()
 		s.requestDefenseAIReview(w, req)
@@ -199,5 +237,116 @@ func TestAIReviewCannotInsertUnscopedForeignEvidencePG(t *testing.T) {
         VALUES($1,$2,$3,'verification_gap','This is the actual case event for review.')`, id, one, oneEvent)
 	if err != nil {
 		t.Fatalf("valid anchor observation rejected: %v", err)
+	}
+}
+
+func TestAIReviewPreviewConsentAndEvidenceDriftPG(t *testing.T) {
+	t.Setenv("ARTEX_MODE", "defense")
+	t.Setenv("ARTEX_DEFENSE_AI_ASSIST_ENABLED", "1")
+	m := investigationTestManager(t)
+	caseID, eventID := investigationTestCase(t, m, "preview-stale", "low")
+	var calls atomic.Int32
+	s := &Server{m: m, defenseAICall: func(_ context.Context, prompt string) (string, error) {
+		calls.Add(1)
+		if strings.Contains(prompt, "src_ip") || strings.Contains(prompt, "company_id") ||
+			strings.Contains(prompt, "host") || strings.Contains(prompt, "2001:db8") {
+			t.Errorf("sensitive values were sent to provider: %s", prompt)
+		}
+		return goodAIReviewFixture, nil
+	}}
+	original := aiPreviewForTest(t, s, caseID)
+	var before int
+	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_ai_review_runs WHERE case_id=$1`, caseID).Scan(&before); err != nil || before != 0 {
+		t.Fatalf("read-only preflight created reservation: %d %v", before, err)
+	}
+	request := func(digest string) *httptest.ResponseRecorder {
+		t.Helper()
+		p := fmt.Sprintf("/api/defense/cases/%d/ai-reviews", caseID)
+		req := httptest.NewRequest(http.MethodPost, p, strings.NewReader(
+			fmt.Sprintf(`{"consent_to_model":true,"reviewed_packet_sha256":%q}`, digest)))
+		req.SetPathValue("id", strconv.FormatInt(caseID, 10))
+		rec := httptest.NewRecorder()
+		s.requestDefenseAIReview(rec, req)
+		return rec
+	}
+	if rec := request(""); rec.Code != 400 {
+		t.Fatalf("missing preview digest accepted: %d", rec.Code)
+	}
+	if rec := request(strings.Repeat("f", 64)); rec.Code != 409 {
+		t.Fatalf("forged preview accepted: %d", rec.Code)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("model called before verified consent")
+	}
+	var alertID int64
+	if err := m.pg.QueryRow(`SELECT alert_id FROM defense_cases WHERE id=$1`, caseID).Scan(&alertID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.pg.Exec(`UPDATE defense_alerts SET severity='high' WHERE id=$1`, alertID); err != nil {
+		t.Fatal(err)
+	}
+	if rec := request(original); rec.Code != 409 {
+		t.Fatalf("stale packet hash accepted: %d %s", rec.Code, rec.Body.String())
+	}
+	if calls.Load() != 0 {
+		t.Fatal("model called on changed evidence")
+	}
+	fresh := aiPreviewForTest(t, s, caseID)
+	if fresh == original {
+		t.Fatal("severity change did not change evidence digest")
+	}
+	rec := request(fresh)
+	if rec.Code != 200 {
+		t.Fatalf("fresh consent rejected: %d %s", rec.Code, rec.Body.String())
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("expected one model call, got %d", calls.Load())
+	}
+	var runID int64
+	if err := m.pg.QueryRow(`SELECT id FROM defense_ai_review_runs WHERE case_id=$1`, caseID).Scan(&runID); err != nil {
+		t.Fatal(err)
+	}
+	var recorded string
+	if err := m.pg.QueryRow(`SELECT packet_sha256 FROM defense_ai_review_runs WHERE id=$1`, runID).Scan(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if recorded != fresh {
+		t.Fatalf("stored consent packet hash mismatch: %q", recorded)
+	}
+	var caused int
+	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_emergency_actions WHERE event_id=$1`, eventID).Scan(&caused); err != nil || caused != 0 {
+		t.Fatalf("consented AI review triggered enforcement: %d %v", caused, err)
+	}
+}
+func TestAIReviewPreviewDisabledAndAdminBoundaries(t *testing.T) {
+	t.Setenv("ARTEX_MODE", "defense")
+	t.Setenv("ARTEX_DEFENSE_AI_ASSIST_ENABLED", "")
+	s := &Server{jwtKey: []byte(strings.Repeat("x", 32))}
+	path := "/api/defense/cases/1/ai-reviews/preview"
+	handler := http.HandlerFunc(s.previewDefenseAIReview)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.SetPathValue("id", "1")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 403 {
+		t.Fatalf("disabled preview: %d", rec.Code)
+	}
+	t.Setenv("ARTEX_DEFENSE_AI_ASSIST_ENABLED", "1")
+	rec = httptest.NewRecorder()
+	s.requireAuth(handler).ServeHTTP(rec, req)
+	if rec.Code != 401 {
+		t.Fatalf("anonymous preview accepted: %d", rec.Code)
+	}
+	req.Header.Set("Authorization", "Collector bogus-secret")
+	rec = httptest.NewRecorder()
+	s.requireAuth(handler).ServeHTTP(rec, req)
+	if rec.Code != 401 {
+		t.Fatalf("sensor credential accepted: %d", rec.Code)
+	}
+	t.Setenv("ARTEX_MODE", "pentest")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 404 {
+		t.Fatalf("preview enabled in pentest: %d", rec.Code)
 	}
 }

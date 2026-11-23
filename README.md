@@ -75,6 +75,7 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 | **PR #12** | Reviewed Sigma-compatible normalized-event rules, scoped password-guessing detector and curated ATT&CK hints | Four fixed, alert-only Sigma-subset rules; evidence-linked hypotheses, no full Sigma backend or containment authority | [Expanded detection coverage](docs/DEFENSE_PHASE12.md) |
 | **PR #13** | Operational health, bounded read-only PostgreSQL snapshots, Prometheus metrics and SOC readiness card | Admin-only low-cardinality metrics, process-local latency and errors, health warnings; **not an SLA or sensor attestation** | [Operational readiness](docs/DEFENSE_PHASE13.md) |
 | **PR #14** | Opt-in, evidence-grounded AI advisory review and immutable human verdicts | Redacted case facts, strict citation validation, model with zero tools, per-call consent, audited decisions; **no autonomous enforcement** | [AI-assisted defensive review](docs/DEFENSE_PHASE14.md) |
+| **PR #15** | Human-reviewed AI evidence preview and offline model output safety evaluations | Exact packet SHA-256 consent, stale-preview rejection, bounded lexical checks, PG no-egress tests; **not semantic validation or a signed attestation** | [AI evidence and safety gates](docs/DEFENSE_PHASE15.md) |
 
 ### Defense architecture
 
@@ -131,6 +132,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 | Review normalized Sigma-subset alerts and evidence-linked ATT&CK mappings | [PR #12: Detection expansion](docs/DEFENSE_PHASE12.md) |
 | Monitor collector reporting, ingestion failures, investigation backlog and emergency readiness | [PR #13: Operational observability](docs/DEFENSE_PHASE13.md) |
 | Run an expressly consented, grounded AI review and record a human decision | [PR #14: AI advisory review](docs/DEFENSE_PHASE14.md) |
+| Preview exactly what AI receives, bind consent to the packet digest, and validate safe advisory output | [PR #15: AI evidence safety](docs/DEFENSE_PHASE15.md) |
 
 ---
 
