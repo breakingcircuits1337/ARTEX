@@ -1,0 +1,23 @@
+# ARTEX Defense: carefully selected source-derived Suricata signatures.
+# Source: artex-defender-github-ready.zip, detection/rules/artex.rules (2026-11-23).
+# Original SIDs preserved. This is an alert-only detection pack, not IPS policy.
+# WARNING: legitimate research, administration and testing can match.
+# No block/drop/reject/pass directives. Install only after operator review.
+#
+# Set HOME_NET/EXTERNAL_NET to the actual environment. These rules are
+# DISTRIBUTED, NOT AUTO-LOADED by ARTEX. Only enable on authorized sensors.
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ARTEX-DEFENDER ARTEX Enrich User-Agent Detected"; flow:established,to_server; http.user_agent; content:"artex-enrich/1.0"; nocase; classtype:policy-violation; sid:9900001; rev:2;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET 8787 (msg:"ARTEX-DEFENDER External Connection to Port 8787 (ARTEX Console Exposed)"; flow:established,to_server; classtype:policy-violation; sid:9900006; rev:2;)
+
+# Narrowed from upstream's generic enumeration pattern to repeated .env probing.
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ARTEX-DEFENDER Repeated .env Path Requests"; flow:established,to_server; http.uri; content:".env"; nocase; threshold:type threshold, track by_src, count 5, seconds 30; classtype:attempted-recon; sid:9900011; rev:2;)
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ARTEX-DEFENDER artex-probe File Request"; flow:established,to_server; http.uri; content:"artex-probe"; nocase; classtype:attempted-recon; sid:9900012; rev:2;)
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ARTEX-DEFENDER CyberStrikeAI User-Agent"; flow:established,to_server; http.user_agent; content:"CyberStrikeAI"; nocase; classtype:policy-violation; sid:9900020; rev:2;)
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ARTEX-DEFENDER PentAGI User-Agent"; flow:established,to_server; http.user_agent; content:"PentAGI"; nocase; classtype:policy-violation; sid:9900021; rev:2;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET 8788 (msg:"ARTEX-DEFENDER External Connection to Port 8788 (ARTEX Proxy Exposed)"; flow:established,to_server; classtype:policy-violation; sid:9900030; rev:2;)
