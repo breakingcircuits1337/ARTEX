@@ -820,6 +820,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/cases/{id}/investigations", s.listDefenseInvestigations)
 	// PR #14: opt-in no-tool AI advisory, outside deterministic investigation.
 	mux.HandleFunc("GET /api/defense/cases/{id}/ai-reviews", s.listDefenseAIReviews)
+    // PR #15: consent is bound to a read-only, exact-redacted-packet preview.
+    mux.HandleFunc("GET /api/defense/cases/{id}/ai-reviews/preview", s.previewDefenseAIReview)
 	mux.HandleFunc("POST /api/defense/cases/{id}/ai-reviews", s.requestDefenseAIReview)
 	mux.HandleFunc("POST /api/defense/ai-reviews/{id}/decision", s.decideDefenseAIReview)
 	mux.HandleFunc("POST /api/defense/cases/{id}/investigations", s.queueDefenseInvestigation)

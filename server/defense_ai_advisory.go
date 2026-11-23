@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -129,6 +130,54 @@ var (
 	errAINoAnchor   = errors.New("case has no correlated anchor observation")
 )
 
+// prepareAIReviewEnvelope constructs the exact versioned, redacted payload to
+// be sent to the model. Both preview and POST use this same encoding path;
+// there is no independently generated client-side hash.
+func (s *Server) prepareAIReviewEnvelope(ctx context.Context, caseID int64) (defense.AIReviewPacket, map[string]int64, []byte, string, error) {
+    packet, refs, err := s.prepareAIReview(ctx, caseID)
+    if err != nil { return defense.AIReviewPacket{}, nil, nil, "", err }
+    raw, err := json.Marshal(packet)
+    if err != nil { return defense.AIReviewPacket{}, nil, nil, "", err }
+    digest := sha256.Sum256(raw)
+    return packet, refs, raw, hex.EncodeToString(digest[:]), nil
+}
+
+// GET is a read-only, authenticated preflight; it never invokes the model,
+// writes a database reservation, or implies the payload was approved.
+func (s *Server) previewDefenseAIReview(w http.ResponseWriter, r *http.Request) {
+    if !s.defenseMode(w) { return }
+    if !defenseAIEnabled() {
+        writeErr(w, http.StatusForbidden, "AI advisory is disabled by operator configuration")
+        return
+    }
+    if s.pg(w) == nil { return }
+    caseID, ok := workflowID(w, r)
+    if !ok { return }
+    ctx, cancel := context.WithTimeout(r.Context(), defenseAIReservationTimeout)
+    defer cancel()
+    packet, _, _, digest, err := s.prepareAIReviewEnvelope(ctx, caseID)
+    switch {
+    case errors.Is(err, sql.ErrNoRows):
+        writeErr(w, http.StatusNotFound, "case not found")
+    case errors.Is(err, errAIClosedCase):
+        writeErr(w, http.StatusConflict, "case must be open for AI review")
+    case errors.Is(err, errAINoAnchor):
+        writeErr(w, http.StatusConflict, "refresh case correlation before requesting AI review")
+    case err != nil:
+        writeErr(w, http.StatusServiceUnavailable, "case evidence preview unavailable")
+    default:
+        w.Header().Set("Cache-Control", "no-store")
+        writeJSON(w, http.StatusOK, map[string]any{
+            "packet": packet, "packet_sha256": digest,
+            "model_configured": s.getDefenseAIModel() != nil,
+            "no_model_call": true, "requires_fresh_consent": true,
+            "note": "Only the redacted packet is sent to your configured model. It may be external. A changed packet requires another preview.",
+        })
+    }
+}
+
+
+
 func (s *Server) reserveAIReview(ctx context.Context, caseID int64, packetHash string) (int64, error) {
 	tx, err := s.m.pg.BeginTx(ctx, nil)
 	if err != nil {
@@ -244,16 +293,23 @@ func (s *Server) requestDefenseAIReview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var input struct {
-		ConsentToModel bool `json:"consent_to_model"`
-	}
+        ConsentToModel bool `json:"consent_to_model"`
+        ReviewedPacketSHA256 string `json:"reviewed_packet_sha256"`
+    }
 	if !decodeDefenseWorkflow(w, r, &input) {
 		return
 	}
 	if !input.ConsentToModel {
-		writeErr(w, 400, "explicit consent is required before sending redacted case facts to the configured model")
-		return
-	}
-	call := s.getDefenseAIModel()
+        writeErr(w, 400, "explicit consent is required before sending redacted case facts to the configured model")
+        return
+    }
+    // Always require a fresh server-produced preview digest. Invalid/old
+    // requests fail before any provider egress or reservation/audit write.
+    if len(input.ReviewedPacketSHA256) != sha256.Size*2 {
+        writeErr(w, 400, "reviewed_packet_sha256 from an evidence preview is required")
+        return
+    }
+    call := s.getDefenseAIModel()
 	if call == nil {
 		writeErr(w, 409, "configure an LLM provider before requesting AI advisory")
 		return
@@ -261,7 +317,7 @@ func (s *Server) requestDefenseAIReview(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), defenseAIReviewTimeout)
 	defer cancel()
 	prepCtx, prepCancel := context.WithTimeout(ctx, defenseAIReservationTimeout)
-	packet, refs, err := s.prepareAIReview(prepCtx, caseID)
+	_, refs, raw, digest, err := s.prepareAIReviewEnvelope(prepCtx, caseID)
 	prepCancel()
 	if errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, 404, "case not found")
@@ -279,14 +335,12 @@ func (s *Server) requestDefenseAIReview(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, 503, "case evidence snapshot unavailable")
 		return
 	}
-	raw, err := json.Marshal(packet)
-	if err != nil {
-		writeErr(w, 503, "AI evidence projection unavailable")
-		return
-	}
-	digest := sha256.Sum256(raw)
-	reserveCtx, reserveCancel := context.WithTimeout(ctx, defenseAIReservationTimeout)
-	id, err := s.reserveAIReview(reserveCtx, caseID, hex.EncodeToString(digest[:]))
+	if subtle.ConstantTimeCompare([]byte(input.ReviewedPacketSHA256), []byte(digest)) != 1 {
+        writeErr(w, http.StatusConflict, "case evidence changed or preview digest invalid; refresh preview and consent again")
+        return
+    }
+    reserveCtx, reserveCancel := context.WithTimeout(ctx, defenseAIReservationTimeout)
+    id, err := s.reserveAIReview(reserveCtx, caseID, digest)
 	reserveCancel()
 	if errors.Is(err, errAIQuota) {
 		writeErr(w, 429, "AI advisory review rate limit reached")
@@ -376,6 +430,7 @@ func (s *Server) requestDefenseAIReview(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"run_id": id, "case_id": caseID, "status": "completed",
+        "packet_sha256": digest,
 		"findings": len(advice.Findings), "requires_human_review": true,
 		"execution": false, "automatic_containment": false,
 	})
