@@ -323,6 +323,11 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 	go s.reconcileConcurrency()
 	s.startTaskArchiveWorker()
 	s.wireInterceptReviewer() // LLM fallback approval: commands that hit no interception rule go to the model for judgment
+	// Emergency response never depends on the LLM, its worker queue, or an
+	// open browser tab. Resume persisted actions after a process restart.
+	if defense.Restricted() && m.pg != nil {
+		go s.runEmergencyReconciler()
+	}
 	return s
 }
 
@@ -772,8 +777,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
 	mux.HandleFunc("GET /api/defense/alerts", s.listDefenseAlerts)
 	mux.HandleFunc("GET /api/defense/summary", s.defenseSummary)
-	// PR #5: static, curated, alert-only detection pack for authorized sensors.
-	// Both endpoints inherit existing /api/* JWT and cookie-origin controls.
+	// Curated alert-only detector metadata and manual rule-file export.
 	mux.HandleFunc("GET /api/defense/detection-pack", s.defenseDetectionCatalog)
 	mux.HandleFunc("GET /api/defense/detection-pack/{engine}", s.defenseDetectionDownload)
 	// Phase 3: human-authorized incident triage and manual-only response review.
@@ -788,6 +792,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/defense/responses/{id}/decision", s.decideDefenseResponse)
 	mux.HandleFunc("POST /api/defense/responses/{id}/simulate", s.simulateDefenseResponse)
 	mux.HandleFunc("GET /api/defense/playbooks", s.listDefensePlaybooks)
+	// Phase 3.1: deterministic emergency actions, human arm/pause and reversal.
+	mux.HandleFunc("GET /api/defense/emergency/status", s.emergencyStatus)
+	mux.HandleFunc("POST /api/defense/emergency/arm", s.emergencyArm)
+	mux.HandleFunc("POST /api/defense/emergency/pause", s.emergencyPause)
+	mux.HandleFunc("GET /api/defense/emergency/actions", s.emergencyListActions)
+	mux.HandleFunc("POST /api/defense/emergency/actions/{id}/revert", s.emergencyRevertOne)
+	mux.HandleFunc("POST /api/defense/emergency/revert-all", s.emergencyRevertAll)
+	mux.HandleFunc("GET /api/defense/emergency/audit", s.emergencyListAudit)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/logs", s.getLogs)
 	mux.HandleFunc("GET /api/logs/history", s.getLogsHistory)
