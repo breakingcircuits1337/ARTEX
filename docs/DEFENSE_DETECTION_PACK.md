@@ -132,8 +132,10 @@ reload Suricata or run sensors inside the main ARTEX container.
 }
 ```
 
-The existing vendor alert logic stores it as an **unverified alert** for
-investigation. It does not automatically assert exploitability.
+Curated SID `9900001` produces a `curated_suricata_9900001` **alert-only**
+SOC finding, with `vendor_alert=false` regardless of incoming sensor
+severity. It is not a confirmed intrusion and is ineligible for emergency
+auto-containment. The original source event remains linked as evidence.
 
 ### Authorized YARA scan reports
 
@@ -172,12 +174,14 @@ modify `ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES`, the runtime allowlist,
 or any enforcement adapter.
 
 PR #4 requires **independent operator configuration and arming** before
-temporary containment. **Do not include any PR #5 signature names in the
-PR #4 emergency allowlist without a separate false-positive investigation
-and high-confidence signal review.** "Alert-only" here means no rule or
-workflow in PR #5 enables blocking; a future administrator can still choose
-a separate policy after review. Unverified YARA reports use `generic`
-source and are *not eligible* under PR #4's deterministic source gates.
+temporary containment. PR #5 also enforces a separate hard gate: when a
+Suricata alert contains one of the curated SIDs, the normalizer sets
+`vendor_alert=false` and issues an alert-only finding. The PR #4 emergency
+fast path requires `vendor_alert=true`, so **these curated detections cannot
+activate automatic containment even if their signature string is added to an
+emergency allowlist**. Do not alter this guard without a new safety review.
+Unverified YARA reports use `generic` source and are also ineligible under
+PR #4's vendor-specific deterministic containment conditions.
 
 ## Validation gates before merging
 
