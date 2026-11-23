@@ -24,7 +24,7 @@ func TestOpsIngestCounterAndHistogramNoDynamicLabels(t *testing.T) {
 		counts.Limited != 1 || counts.Failed != 1 {
 		t.Fatalf("bad ingestion counters %+v", counts)
 	}
-	for i, want := range []uint64{1, 2, 3, 3, 3, 4} {
+	for i, want := range []uint64{1, 2, 3, 3, 3, 4, 4} {
 		if got := m.latency[i].Load(); got != want {
 			t.Errorf("bucket %d got %d want %d", i, got, want)
 		}

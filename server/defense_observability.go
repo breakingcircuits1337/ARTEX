@@ -45,7 +45,7 @@ type defenseIngestRuntime struct {
 	limited       atomic.Uint64
 	failed        atomic.Uint64
 	durationNanos atomic.Uint64
-	latency       [6]atomic.Uint64 // 5 fixed bucket limits + Inf
+	latency       [7]atomic.Uint64 // 6 finite histogram buckets + Inf
 }
 type ingestCounts struct {
 	Total           uint64  `json:"requests_total"`
@@ -386,7 +386,7 @@ func (s *Server) defenseOperationsMetrics(w http.ResponseWriter, r *http.Request
 	for i, bucket := range defenseIngestBuckets {
 		fmt.Fprintf(&b, "artex_defense_ingest_handler_duration_seconds_bucket{le=%q} %d\n", bucket.text, s.defenseIngest.latency[i].Load())
 	}
-	fmt.Fprintf(&b, "artex_defense_ingest_handler_duration_seconds_bucket{le=\"+Inf\"} %d\n", s.defenseIngest.latency[5].Load())
+	fmt.Fprintf(&b, "artex_defense_ingest_handler_duration_seconds_bucket{le=\"+Inf\"} %d\n", s.defenseIngest.latency[len(s.defenseIngest.latency)-1].Load())
 	fmt.Fprintf(&b, "artex_defense_ingest_handler_duration_seconds_sum %s\n",
 		strconv.FormatFloat(count.DurationSeconds, 'f', 6, 64))
 	fmt.Fprintf(&b, "artex_defense_ingest_handler_duration_seconds_count %d\n", count.Total)
