@@ -1,0 +1,33 @@
+name: temporary-pr7-gofmt
+# Scoped one-shot to format the PR branch; remove after completion.
+on:
+  push:
+    branches: [feature/phase7-autonomous-defensive-investigation]
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'breakingcircuits1337/ARTEX'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run canonical gofmt for tracked PR sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "feature/phase7-autonomous-defensive-investigation"
+          mapfile -t gofiles < <(git ls-files '*.go')
+          gofmt -w "${gofiles[@]}"
+          if git diff --quiet -- '*.go'; then
+            echo "Go sources are already formatted"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '*.go'
+          git diff --cached --check
+          git commit -m 'style(defense): run gofmt for autonomous investigator PR'
+          git push origin HEAD:refs/heads/feature/phase7-autonomous-defensive-investigation
