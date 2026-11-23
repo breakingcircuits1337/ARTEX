@@ -38,11 +38,17 @@ func investigationTestCase(t *testing.T, m *Manager, suffix, severity string) (c
 	}
 	defer tx.Rollback()
 	key := fmt.Sprintf("phase7-%s-%d", suffix, time.Now().UnixNano())
+	// Give each synthetic incident its own IPv6 documentation-range tuple:
+	// Phase 6 intentionally correlates matching source/destination pairs.
+	// Reusing a hard-coded tuple across tests creates legitimate extra links.
+	seed := uint64(time.Now().UnixNano())
+	src := fmt.Sprintf("2001:db8:%x:%x:%x::1", seed&0xffff, (seed>>16)&0xffff, (seed>>32)&0xffff)
+	dst := fmt.Sprintf("2001:db8:%x:%x:%x::2", seed&0xffff, (seed>>16)&0xffff, (seed>>32)&0xffff)
 	if err := tx.QueryRowContext(ctx, `
 		INSERT INTO defense_events
 		(source,external_id,observed_at,kind,src_ip,dst_ip,severity)
-		VALUES('suricata',$1,now(),'network','198.51.100.47','192.0.2.12',6)
-		RETURNING id`, key).Scan(&eventID); err != nil {
+		VALUES('suricata',$1,now(),'network',$2,$3,6)
+		RETURNING id`, key, src, dst).Scan(&eventID); err != nil {
 		t.Fatal(err)
 	}
 	var alertID int64
