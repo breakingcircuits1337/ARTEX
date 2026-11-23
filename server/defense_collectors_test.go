@@ -145,6 +145,22 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_events WHERE collector_id=$1`, c.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("source evidence count=%d error=%v", count, err)
 	}
+	second := invoke("/api/defense/collectors", "Bearer "+admin,
+		fmt.Sprintf(`{"name":"%s-b","source":"generic"}`, name), 0)
+	if second.Code != http.StatusCreated {
+		t.Fatalf("second collector status=%d body=%s", second.Code, second.Body.String())
+	}
+	var c2 struct { ID int64 `json:"id"`; Token string `json:"token"` }
+	if err := json.Unmarshal(second.Body.Bytes(), &c2); err != nil { t.Fatal(err) }
+	if response := feed(c2.Token, batch); response.Code != 200 {
+		t.Fatalf("same external ID from another sensor rejected: %d", response.Code)
+	}
+	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_events WHERE external_id=$1 AND collector_id IN ($2,$3)`,
+		"same-collector-test", c.ID, c2.ID).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("per-collector provenance failed count=%d error=%v", count, err)
+	}
+	identity, err := s.authenticateCollector(context.Background(), "Collector "+c.Token)
+	if err != nil { t.Fatal(err) }
 	rotate := invoke(fmt.Sprintf("/api/defense/collectors/%d/rotate", c.ID), "Bearer "+admin, "", c.ID)
 	if rotate.Code != 200 {
 		t.Fatalf("rotate status=%d body=%s", rotate.Code, rotate.Body.String())
@@ -157,6 +173,13 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	}
 	if replacement.Token == "" || replacement.Token == c.Token {
 		t.Fatal("rotation did not replace secret")
+	}
+	tx, err := m.pg.BeginTx(context.Background(), nil)
+	if err != nil { t.Fatal(err) }
+	valid, err := validateCollectorTransaction(context.Background(), tx, identity)
+	_ = tx.Rollback()
+	if err != nil || valid {
+		t.Fatalf("stale in-flight identity survived rotation: valid=%v err=%v", valid, err)
 	}
 	if response := feed(c.Token, batch); response.Code != 401 {
 		t.Fatalf("old credential allowed after rotation: %d", response.Code)

@@ -111,7 +111,7 @@ class ForwarderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = pathlib.Path(tmp)
             log = folder / "sensor.jsonl"
-            log.write_text('{"kind":"other","event_id":"old"}\\n')
+            log.write_text('{"kind":"other","event_id":"old"}\n')
             with forwarder.Spool(folder / "state.db", "generic") as spool:
                 self.assertEqual(spool.stage(log, 20), 1)
                 log.write_text("")
@@ -120,7 +120,7 @@ class ForwarderTests(unittest.TestCase):
                     "SELECT offset FROM source_cursors WHERE path=?", (str(log),)
                 ).fetchone()
                 self.assertEqual(cursor[0], 0)
-                log.write_text('{"kind":"other","event_id":"new"}\\n')
+                log.write_text('{"kind":"other","event_id":"new"}\n')
                 self.assertEqual(spool.stage(log, 20), 1)
                 self.assertEqual(
                     [record["event_id"] for _, record in spool.batch(20)],
