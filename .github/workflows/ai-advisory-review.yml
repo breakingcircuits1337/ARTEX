@@ -1,0 +1,74 @@
+name: ai-advisory-review
+
+on:
+  pull_request:
+    paths:
+      - "defense/ai_advisory*.go"
+      - "server/defense_ai_advisory*.go"
+      - "server/server.go"
+      - "db/migrations/0024_defense_ai_advisory.sql"
+      - "web/src/app/(main)/function/defense/intelligence/**"
+      - ".github/workflows/ai-advisory-review.yml"
+  push:
+    branches: [main]
+    paths:
+      - "defense/ai_advisory*.go"
+      - "server/defense_ai_advisory*.go"
+      - "server/server.go"
+      - "db/migrations/0024_defense_ai_advisory.sql"
+      - "web/src/app/(main)/function/defense/intelligence/**"
+      - ".github/workflows/ai-advisory-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  advisory-security:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: artex
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: artextest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
+      ARTEX_DEFENSE_AI_ASSIST_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Go formatting gate
+        run: |
+          files=$(gofmt -l defense/ai_advisory.go defense/ai_advisory_test.go server/defense_ai_advisory.go server/defense_ai_advisory_test.go server/server.go)
+          if [ -n "$files" ]; then printf 'gofmt required:\n%s\n' "$files"; exit 1; fi
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Validate no-tool AI parser and PostgreSQL manual approval
+        run: go test -count=1 ./defense ./server -run 'TestAI'
+      - name: Validate fresh migration chain
+        run: go test -count=1 ./db -run 'TestOpenMigratesFreshDatabase'
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx tsc --noEmit
+        working-directory: web
+      - run: npm run build:static
+        working-directory: web
