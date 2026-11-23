@@ -22,6 +22,7 @@ type correlatedEvent struct {
 	ID          int64
 	Source      string
 	CollectorID sql.NullInt64
+	CompanyID   sql.NullInt64
 	Kind        string
 	SrcIP       string
 	DstIP       string
@@ -47,30 +48,35 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 	var ruleID string
 	err := tx.QueryRowContext(ctx, `
 		SELECT e.id,e.source,e.kind,e.src_ip,e.dst_ip,e.host,
-		       e.signature,e.observed_at,a.rule_id,e.collector_id
+		       e.signature,e.observed_at,a.rule_id,e.collector_id,e.company_id
 		  FROM defense_cases c
 		  JOIN defense_alerts a ON a.id=c.alert_id
 		  JOIN defense_events e ON e.id=a.event_id
 		 WHERE c.id=$1 FOR SHARE OF c`, caseID).Scan(
 		&anchor.ID, &anchor.Source, &anchor.Kind, &anchor.SrcIP,
 		&anchor.DstIP, &anchor.Host, &anchor.Signature,
-		&anchor.ObservedAt, &ruleID, &anchor.CollectorID,
+		&anchor.ObservedAt, &ruleID, &anchor.CollectorID, &anchor.CompanyID,
 	)
 	if err != nil {
 		return result, err
 	}
-	// Same collector identity (or legacy NULL) + vendor, two matching fields,
-	// and a 30-minute window. Cross-collector links need a separately
-	// validated multi-sensor correlation policy (not in this phase).
-	// Matching an IP alone (NAT/shared gateways) is not sufficient to connect
-	// events. All of these links remain unconfirmed investigative candidates.
+	// Strict scope before every other match: the anchor's assigned company
+	// must be the same. Unscoped legacy anchors remain anchor-only, because
+	// historical company ownership cannot be verified from an IP. Independent
+	// collectors must both be enrolled and bound to one explicit company.
+	// A source IP alone is never evidence; two matching fields and ±15 min
+	// produce low-confidence investigative links, NEVER response authority.
 	rows, err := tx.QueryContext(ctx, `
 		SELECT e.id,e.source,e.kind,e.src_ip,e.dst_ip,e.host,
-		       e.signature,e.observed_at
+		       e.signature,e.observed_at,e.collector_id,e.company_id
 		  FROM defense_events e
 		 WHERE e.id=$1 OR (
-		     e.source=$2
-		     AND e.collector_id IS NOT DISTINCT FROM $9::bigint
+		     e.company_id=$10::bigint
+		     AND (
+		       (e.source=$2 AND e.collector_id IS NOT DISTINCT FROM $9::bigint)
+		       OR ($10::bigint IS NOT NULL AND $9::bigint IS NOT NULL
+		           AND e.collector_id IS NOT NULL AND e.collector_id <> $9::bigint)
+		     )
 		     AND e.observed_at BETWEEN $6 AND $7
 		     AND (
 		       ($3<>'' AND $4<>'' AND e.src_ip=$3 AND e.dst_ip=$4)
@@ -83,7 +89,7 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		anchor.ID, anchor.Source, anchor.SrcIP, anchor.DstIP, anchor.Host,
 		anchor.ObservedAt.Add(-caseCorrelationWindow),
 		anchor.ObservedAt.Add(caseCorrelationWindow),
-		caseCorrelationLimit, anchor.CollectorID)
+		caseCorrelationLimit, anchor.CollectorID, anchor.CompanyID)
 	if err != nil {
 		return result, err
 	}
@@ -91,12 +97,18 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 	for rows.Next() {
 		var e correlatedEvent
 		if err := rows.Scan(&e.ID, &e.Source, &e.Kind, &e.SrcIP,
-			&e.DstIP, &e.Host, &e.Signature, &e.ObservedAt); err != nil {
+			&e.DstIP, &e.Host, &e.Signature, &e.ObservedAt, &e.CollectorID, &e.CompanyID); err != nil {
 			rows.Close()
 			return result, err
 		}
 		if e.ID == anchor.ID {
 			e.Reason, e.Confidence = "alert_anchor", 95
+		} else if e.CollectorID.Valid && anchor.CollectorID.Valid && e.CollectorID.Int64 != anchor.CollectorID.Int64 {
+			if anchor.SrcIP != "" && anchor.DstIP != "" && e.SrcIP == anchor.SrcIP && e.DstIP == anchor.DstIP {
+				e.Reason, e.Confidence = "independent_collector_endpoints", 60
+			} else {
+				e.Reason, e.Confidence = "independent_collector_host_ip", 55
+			}
 		} else if anchor.SrcIP != "" && anchor.DstIP != "" &&
 			e.SrcIP == anchor.SrcIP && e.DstIP == anchor.DstIP {
 			e.Reason, e.Confidence = "same_source_and_endpoints", 55
@@ -188,7 +200,7 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		}
 	}
 	if actor != "" {
-		detail := fmt.Sprintf("Evidence-only correlation: %d events reviewed; up to %d candidates within ±15 minutes; no external actions",
+		detail := fmt.Sprintf("Company-scoped evidence-only correlation: %d events reviewed; up to %d candidates within ±15 minutes; independent sensor matches are review hypotheses; no external actions",
 			len(candidates), caseCorrelationLimit)
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO defense_case_intel_audit(case_id,audit_kind,actor,detail)

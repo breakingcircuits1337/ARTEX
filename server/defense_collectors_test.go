@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -103,8 +104,12 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 		return rec
 	}
 	name := fmt.Sprintf("pr10-%d", time.Now().UnixNano())
+	var companyID int64
+	if err := m.pg.QueryRow(`INSERT INTO companies(name,nkey) VALUES($1,$2) RETURNING id`, name, name).Scan(&companyID); err != nil {
+		t.Fatal(err)
+	}
 	create := invoke("/api/defense/collectors", "Bearer "+admin,
-		fmt.Sprintf(`{"name":"%s","source":"generic"}`, name), 0)
+		fmt.Sprintf(`{"name":"%s","source":"generic","company_id":%d}`, name, companyID), 0)
 	if create.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", create.Code, create.Body.String())
 	}
@@ -117,6 +122,10 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 	}
 	if c.ID == 0 || !strings.HasPrefix(c.Token, "dc1.") {
 		t.Fatal("missing token")
+	}
+	var scopedCompany sql.NullInt64
+	if err := m.pg.QueryRow(`SELECT company_id FROM defense_collectors WHERE id=$1`, c.ID).Scan(&scopedCompany); err != nil || !scopedCompany.Valid || scopedCompany.Int64 != companyID {
+		t.Fatalf("collector scope unexpected %v err=%v", scopedCompany, err)
 	}
 	var hash string
 	if err := m.pg.QueryRow(`SELECT token_hash FROM defense_collectors WHERE id=$1`, c.ID).Scan(&hash); err != nil {
@@ -138,15 +147,19 @@ func TestCollectorProvisionScopeReplayRotationAndRevokePG(t *testing.T) {
 		t.Fatalf("replay status=%d body=%s", b.Code, b.Body.String())
 	}
 	wrong := feed(c.Token, `{"source":"wazuh","events":[{"kind":"other"}]}`)
+	spoofedCompany := feed(c.Token, `{"source":"generic","company_id":999,"events":[{"kind":"other"}]}`)
+	if spoofedCompany.Code != http.StatusForbidden {
+		t.Fatalf("collector spoofed company accepted: %d", spoofedCompany.Code)
+	}
 	if wrong.Code != 403 {
 		t.Fatalf("cross-source post status=%d", wrong.Code)
 	}
 	var count int
-	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_events WHERE collector_id=$1`, c.ID).Scan(&count); err != nil || count != 1 {
-		t.Fatalf("source evidence count=%d error=%v", count, err)
+	if err := m.pg.QueryRow(`SELECT count(*) FROM defense_events WHERE collector_id=$1 AND company_id=$2`, c.ID, companyID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("source-scoped evidence count=%d error=%v", count, err)
 	}
 	second := invoke("/api/defense/collectors", "Bearer "+admin,
-		fmt.Sprintf(`{"name":"%s-b","source":"generic"}`, name), 0)
+		fmt.Sprintf(`{"name":"%s-b","source":"generic","company_id":%d}`, name, companyID), 0)
 	if second.Code != http.StatusCreated {
 		t.Fatalf("second collector status=%d body=%s", second.Code, second.Body.String())
 	}

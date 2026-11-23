@@ -37,7 +37,7 @@ authorized, controlled network deployment; it is not an OT certification.
 - A compromised collector can still forge events *under its own credential*:
   this provides credential provenance, not cryptographic sensor attestation.
   A collector token must never be treated as proof that the source event is true.
-- This phase does not yet implement multi-tenant isolation, mTLS, RBAC,
+- PR #11 adds company-scoped evidence matching and permanent collector company binding, **not tenant-user RBAC or full multi-tenant hosting**. This phase does not implement mTLS,
   per-collector IP ACLs, or SIEM-scale queuing.
 
 ## Provision a collector
@@ -49,7 +49,7 @@ the following to the **private console endpoint**:
 curl -fsS https://your-private-soc.example/api/defense/collectors \
   -H "Authorization: Bearer $ARTEX_ADMIN_JWT" \
   -H 'Content-Type: application/json' \
-  --data '{"name":"sensor-dmz-01","source":"suricata"}'
+  --data '{"name":"sensor-dmz-01","source":"suricata","company_id":42}'
 ```
 
 The `token` appears **once** in the response. Store it in a restricted secret
