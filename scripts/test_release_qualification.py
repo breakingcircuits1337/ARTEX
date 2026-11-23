@@ -29,6 +29,8 @@ class ReleaseQualificationTests(unittest.TestCase):
         binary = "artex.exe" if os_name == "windows" else "artex"
         launcher = "start.bat" if os_name == "windows" else "start.sh"
         with zipfile.ZipFile(dest, "w") as z:
+            # build.sh uses "zip -r" and emits the explicit root directory.
+            z.writestr(f"{prefix}/", b"")
             for filename, data in {
                 binary: b"binary",
                 launcher: b"echo start",

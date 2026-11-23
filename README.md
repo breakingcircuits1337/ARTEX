@@ -34,6 +34,8 @@ ARTEX supports **two distinct operating modes**. The original autonomous penetra
 
 The defense engine is **not simply the offensive agent with a different prompt**: Phase 1 enforces a fail-closed, code-level defensive tool allowlist. Later defense phases use separate bounded database analyses. The Phase 7 investigator is *deterministic*, not a free-running LLM with shell or scanning privileges.
 
+**Release qualification (Phase 18):** Build/test gates now also include reachable Go vulnerability checks, high/critical Node production-dependency audits and CodeQL review; tagged releases rerun CI/security gates and validate every archive, checksum and SBOM before publication. See the [Phase 18 qualification and manual production signoff](docs/DEFENSE_PHASE18.md). **A green pipeline is not a production, OT or critical-infrastructure certification.**
+
 **Project lineage and license:** Original work by [Autumn-27](https://github.com/Autumn-27), subsequently continued in [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX); this [Breaking Circuits fork](https://github.com/breakingcircuits1337/ARTEX-DEFENSE) adds the opt-in defensive platform. Licensed under [AGPL-3.0](LICENSE). Preserve upstream credits when redistributing.
 
 ---
