@@ -32,8 +32,12 @@ func enqueueDefenseInvestigation(ctx context.Context, tx *sql.Tx, caseID int64, 
 	if err != nil {
 		return 0, false, err
 	}
+	actor := "console-admin"
+	if trigger == "auto_alert" {
+		actor = "investigator"
+	}
 	if err := appendInvestigationAudit(ctx, tx, id, caseID, "queued",
-		"investigator", "Review-only investigation queued from stored case evidence"); err != nil {
+		actor, "Review-only investigation queued from stored case evidence"); err != nil {
 		return 0, false, err
 	}
 	return id, true, nil
