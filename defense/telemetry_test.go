@@ -39,6 +39,31 @@ func TestCommonSensorTimezoneFormats(t *testing.T) {
  }
 }
 
+func TestCuratedYARAObservationIsAlertOnly(t *testing.T) {
+	now := time.Now().UTC()
+	e, err := NormalizeEvent("generic", json.RawMessage(`{"event_id":"yara-1","kind":"endpoint","host":"test-asset","signature":"ARTEX_JSP_Webshell_Numbered"}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := EvaluateEvent(e)
+	if len(hits) != 1 || hits[0].RuleID != "curated_yara_ARTEX_JSP_Webshell_Numbered" ||
+		hits[0].Severity != "high" {
+		t.Fatalf("unexpected YARA observation: %+v", hits)
+	}
+	if e.VendorAlert {
+		t.Fatal("YARA report must not impersonate an upstream blocking signal")
+	}
+	e.Signature = "unknown_user_defined_rule"
+	if len(EvaluateEvent(e)) != 0 {
+		t.Fatal("unknown YARA name should not generate a curated alert")
+	}
+	e.Source = "suricata"
+	e.Signature = "ARTEX_JSP_Webshell_Numbered"
+	if len(EvaluateEvent(e)) != 0 {
+		t.Fatal("source spoofing should not generate YARA rule match")
+	}
+}
+
 func TestNormalizeRejectsInvalidInput(t *testing.T) {
  now:=time.Now()
  for _,raw:=range []string{
