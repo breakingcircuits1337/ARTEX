@@ -146,6 +146,12 @@ func (s *Server) defenseCaseGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows.Close()
+	// Append recorded indicator relationships and clearly marked
+	// hypotheses; never treat tentative graph edges as causal proof.
+	if err := appendCorrelationGraph(r.Context(), pg, id, &nodes, &edges); err != nil {
+		writeErr(w, 503, "case correlation graph unavailable")
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"case_id": id, "mode": "read_only", "nodes": nodes, "edges": edges,
