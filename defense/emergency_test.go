@@ -55,6 +55,26 @@ func TestEmergencyScopeAndExemptions(t *testing.T) {
 	}
 }
 
+func TestPrivateDestinationsRequireSeparateLiveOptIn(t *testing.T) {
+	_ = armedEmergencyTest(t)
+	t.Setenv("ARTEX_AUTO_CONTAIN_MODE", "nftables")
+	cfg, err := LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EligibleIP("1.1.1.1", "10.4.0.3") {
+		t.Fatal("live private/OT destination was enabled by default")
+	}
+	t.Setenv("ARTEX_AUTO_CONTAIN_ALLOW_PRIVATE_DESTS", "true")
+	cfg, err = LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EligibleIP("1.1.1.1", "10.4.0.3") {
+		t.Fatal("explicit private destination opt-in was rejected")
+	}
+}
+
 func TestEmergencyRequiresEvidence(t *testing.T) {
 	cfg := armedEmergencyTest(t)
 	now := time.Now().UTC()
