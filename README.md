@@ -13,7 +13,7 @@ A self-hosted Go + PostgreSQL security platform with an embedded Next.js console
 [![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX?color=6b34db)](go.mod)
 [![Upstream releases](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=upstream%20release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
 
-[Quick start](#quick-start) · [Defense capabilities](#art-ex-defense-capabilities) · [Defensive setup](#defense-quick-start) · [Response safety](#defensive-response-safety) · [Architecture](#architecture) · [Installation](#installation) · [Security](SECURITY.md)
+[Quick start](#quick-start) · [Defense capabilities](#artex-defense-capabilities) · [Defensive setup](#defense-quick-start) · [Response safety](#defensive-response-safety) · [Architecture](#architecture) · [Installation](#installation) · [Security](SECURITY.md)
 
 </div>
 
@@ -31,6 +31,7 @@ The defense engine is **not simply the offensive agent with a different prompt**
 **Project lineage and license:** Original work by [Autumn-27](https://github.com/Autumn-27), subsequently continued in [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX); this [Breaking Circuits fork](https://github.com/breakingcircuits1337/ARTEX) adds the opt-in defensive platform. Licensed under [AGPL-3.0](LICENSE). Preserve upstream credits when redistributing.
 
 ---
+
 ## Quick start
 
 Clone **this repository** and build the image from your checkout so the defensive features are included:
@@ -128,6 +129,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 The original ARTEX LLM-driven planner, workers, dual graph, recorded proxy, tests, findings, and tooling remain documented below for **authorized penetration testing**. The following worker, screenshot and installation sections describe that original engine and should not be confused with the restricted defense-mode investigation worker.
 
 ---
+
 ## Multi-provider workers
 
 In **System → LLM**, configure the profiles you want to use. In **System → Settings**,
