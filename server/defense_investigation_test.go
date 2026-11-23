@@ -24,7 +24,7 @@ func investigationTestManager(t *testing.T) *Manager {
 		}
 		t.Fatalf("configured test PostgreSQL must not silently skip: %v", err)
 	}
-	t.Cleanup(m.Close)
+	t.Cleanup(func() { _ = m.Close() })
 	return m
 }
 
