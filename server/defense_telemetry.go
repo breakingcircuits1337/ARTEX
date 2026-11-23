@@ -82,7 +82,7 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter,r *http.Request) {
   if e.Kind=="authentication" && e.Outcome=="failure" && e.SrcIP!="" && e.Username!="" {
    var users int
    err=tx.QueryRowContext(ctx,`
-    SELECT COUNT(DISTINCT username) FROM defense_events
+    SELECT COUNT(DISTINCT lower(username)) FROM defense_events
     WHERE kind='authentication' AND outcome='failure' AND src_ip=$1
       AND username<>'' AND observed_at BETWEEN $2 AND $3
    `,e.SrcIP,e.ObservedAt.Add(-10*time.Minute),e.ObservedAt).Scan(&users)
