@@ -21,73 +21,40 @@ Open **Functions → Defense SOC** (`/function/defense`). The page polls
 `/api/defense/summary`, `/api/defense/events` and
 `/api/defense/alerts` every 15 seconds while the tab is visible.
 
-## API and authentication
+## API and authentication (Phase 2 legacy and PR #10)
 
-All endpoints go through ARTEX's existing session JWT verification and
-same-origin cookie protections. **No anonymous ingest route exists**.
-For this prototype, use a bearer token obtained from your own ARTEX login
-session over a trusted/private network. The existing JWT expires after seven
-days; rotate/re-authenticate collectors before expiry. A dedicated
-restricted-scope collector token with rotation and IP/rate restrictions is
-future work; **never expose an admin JWT in a public-facing collector**.
+The original Phase 2 `POST /api/defense/events` uses an administrator
+session JWT and remains for compatibility. **Do not give it to an unattended
+collector.** PR #10 provides a separate least-privileged sensor credential
+for `POST /api/defense/collector/events`, bound to a single sensor type.
+Administrator-only collector creation, rotation and revocation endpoints return
+a random secret only once. See [PR #10 guide](DEFENSE_PHASE10.md).
 
-| Method | Route | Operation |
-| --- | --- | --- |
-| POST | `/api/defense/events` | Insert 1–50 security events (max 1 MiB request, 128 KiB/event) |
-| GET | `/api/defense/events?limit=50` | Latest normalized events (max 100) |
-| GET | `/api/defense/alerts?limit=50` | Latest detection signals with linked evidence IDs (max 100) |
-| GET | `/api/defense/summary` | Event, alert and asset-link counts |
+The original read-only endpoints continue to require a console session.
+Sensor posts remain capped at 50 events and 1 MiB per batch, with per-collector
+600-events/minute admission. A rejected/over-quota batch does not commit.
+Malformed records fail before database writes. Within a collector, replayed
+events with identical external IDs deduplicate; overlapping IDs from
+different collectors remain separate evidence.
 
-Ingestion envelope: `{"source":"suricata|wazuh|generic|ocsf","events":[{...}]}`.
-Malformed event data fails the batch before any database writes; database
-insertion and detection are transactional. Replayed events with an identical
-`source` and `external_id` are deduplicated. Without a vendor ID, the
-normalized JSON content is hashed as the stable event ID.
+### Continuous log forwarding
 
-**Generic example** (replace JWT with a valid ARTEX session bearer):
-
-```bash
-curl -fsS http://127.0.0.1:8787/api/defense/events \
-  -H "Authorization: Bearer $ARTEX_JWT" \
-  -H 'Content-Type: application/json' \
-  --data '{"source":"generic","events":[{"event_id":"demo-1","kind":"authentication","outcome":"failure","src_ip":"192.0.2.10","username":"alice","timestamp":"2026-11-23T12:00:00Z"}]}'
-```
-
-**Suricata EVE**: send a JSON event object inside `events`, including
-`event_type="alert"`, `src_ip`, `dest_ip`,
-`alert.signature`, and `alert.severity`. Severity 1 becomes high; other
-levels are mapped conservatively. **Wazuh**: send the alert JSON with `id`,
-`rule.level`, `rule.description`, `rule.groups`, `agent.name`,
-`data.srcip`, `data.srcuser`. A Wazuh level of 10 or greater qualifies as
-a vendor signal. `ocsf` accepts a **limited field projection only** and
-is not full OCSF validation or fidelity.
-
-Forwarders should batch fewer than 50 records and send them using TLS or a
-private tunnel. Do not automatically forward complete raw logs, credentials,
-request/response bodies, or tokens.
-
-### Continuous log forwarding (included)
-
-A Python standard-library forwarder now reads Suricata EVE or Wazuh
-newline-delimited JSON and pushes batches to the authenticated API:
+Use `scripts/defense_forwarder.py` **with a dedicated sensor credential**,
+not `ARTEX_DEFENSE_JWT`. The Python standard-library collector now persists
+an SQLite queue, source offset and device/inode in atomic transactions, retries
+network failures with backoff, and handles rename/create log rotation.
+The queue holds raw sensor JSON and requires restrictive local permissions.
 
 ```bash
-# Authenticated ARTEX session bearer from your own login, never hard-code in a script.
-export ARTEX_DEFENSE_JWT='<your-authenticated-session-token>'
-python3 scripts/defense_forwarder.py --source suricata --file /var/log/suricata/eve.json --follow --url https://your-private-soc.example
-# Wazuh on a separately authorized collector:
-python3 scripts/defense_forwarder.py --source wazuh --file /var/ossec/logs/alerts/alerts.json --follow --url https://your-private-soc.example
+export ARTEX_COLLECTOR_TOKEN='<securely issued dc1 collector token>'
+python3 scripts/defense_forwarder.py --source suricata \
+  --file /var/log/suricata/eve.json --follow \
+  --url https://your-private-soc.example \
+  --state /var/lib/artex-defense/sensor-01.sqlite3
 ```
 
-Remote HTTP destinations are rejected; local loopback HTTP is allowed.
-Redirects are disabled so authorization headers are not sent to a new origin.
-Partial batches flush after roughly five seconds when following a quiet file.
-The forwarder does not implement durable cursor checkpoints, log rotation
-reopening, queueing, backpressure or retry scheduling; a failed send causes
-a visible failure and needs operator supervision. Replaying the file on restart
-is safe with ingestion deduplication, but can be costly for large logs.
-Run `python3 -m unittest scripts/test_defense_forwarder.py` for offline checks.
-
+For collector provisioning, endpoint contracts, reliability guarantees and
+known limitations, read [Secure Collector & Durable Telemetry](DEFENSE_PHASE10.md).
 
 ## Detectors — deterministic version 1
 
