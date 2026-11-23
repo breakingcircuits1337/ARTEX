@@ -82,6 +82,9 @@ export default function DefenseSOCPage() {
         <Link href="/function/defense/cases" className="mt-3 inline-flex rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
           Review cases and manual response approvals →
         </Link>
+        <Link href="/function/defense/emergency" className="ml-3 mt-3 inline-flex rounded-md border border-amber-500/40 px-3 py-2 text-sm font-medium hover:bg-muted">
+          Emergency auto-containment & one-click rollback →
+        </Link>
       </header>
       {loading && <p className="text-muted-foreground">Loading authorized telemetry…</p>}
       {error && (

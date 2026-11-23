@@ -113,6 +113,11 @@ func run() int {
 		log.Printf("[config] %v", err)
 		return 1
 	}
+	// Never start a live emergency service with an invalid or missing scope.
+	if _, err := defense.LoadEmergencyConfig(); err != nil {
+		log.Printf("[config] emergency containment: %v", err)
+		return 1
+	}
 
 	// hand the build version to the server package so GET /api/health can report it
 	// to the frontend top bar.

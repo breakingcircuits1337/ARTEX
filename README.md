@@ -42,7 +42,7 @@ justify it, and every autonomous action passes through scope rules, approval gat
 **ARTEX Defense (opt-in preview):** set `ARTEX_MODE=defense` to enable
 Phase 1 passive exposure triage and Phase 2 authenticated security telemetry,
 deterministic alert signals, asset links, and the read-only SOC page.
-See [Phase 1](docs/DEFENSE_PHASE1.md), [Phase 2](docs/DEFENSE_PHASE2.md), and [Phase 3: incident response review](docs/DEFENSE_PHASE3.md).
+See [Phase 1](docs/DEFENSE_PHASE1.md), [Phase 2](docs/DEFENSE_PHASE2.md), and [Phase 3: incident response review](docs/DEFENSE_PHASE3.md) and [Emergency Auto-Containment](docs/DEFENSE_EMERGENCY.md).
 This mode is a defensive prototype; it does not guarantee network isolation or
 production-safe autonomous incident response.
 
