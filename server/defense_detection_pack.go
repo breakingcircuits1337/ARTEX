@@ -23,13 +23,13 @@ func (s *Server) defenseDetectionCatalog(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"catalog": catalog,
-		"installation": "operator-managed sensors only",
-		"automatic_activation": false,
+		"catalog":                catalog,
+		"installation":           "operator-managed sensors only",
+		"automatic_activation":   false,
 		"autonomous_containment": false,
 		"downloads": map[string]string{
 			"suricata": "/api/defense/detection-pack/suricata",
-			"yara": "/api/defense/detection-pack/yara",
+			"yara":     "/api/defense/detection-pack/yara",
 		},
 	})
 }
