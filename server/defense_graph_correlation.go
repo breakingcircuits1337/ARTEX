@@ -91,9 +91,33 @@ func appendCorrelationGraph(
 				"verified_malicious": false,
 			},
 		})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// Every indicator-to-event edge is backed by a strict case-local FK,
+	// not just the first event which mentioned the value.
+	rows, err = pg.QueryContext(ctx, `
+		SELECT indicator_id,event_id,evidence_role
+		FROM defense_indicator_evidence WHERE case_id=$1
+		ORDER BY event_id,indicator_id LIMIT 250`, caseID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var indicatorID, eventID int64
+		var role string
+		if err := rows.Scan(&indicatorID, &eventID, &role); err != nil {
+			rows.Close()
+			return err
+		}
 		*edges = append(*edges, defenseGraphEdge{
-			Source: fmt.Sprintf("event:%d", firstEventID),
-			Target: key, Relation: "observed_in",
+			Source: fmt.Sprintf("event:%d", eventID),
+			Target: fmt.Sprintf("indicator:%d", indicatorID),
+			Relation: "observed_" + role,
 		})
 	}
 	if err := rows.Err(); err != nil {
