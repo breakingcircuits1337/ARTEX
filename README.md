@@ -4,7 +4,9 @@
 
 # ARTEX-DEFENSE
 
-**Evidence-first security testing and defense operations — autonomous where safe, human-controlled where it matters.**
+**Breaking Circuits' evidence-first SOC and security assessment platform.**
+
+**Detect → Correlate → Investigate → Review → Respond → Recover** · Defense phases **1–15** · Human-controlled AI and containment.
 
 A self-hosted Go + PostgreSQL security platform with an embedded Next.js console.
 
@@ -13,13 +15,15 @@ A self-hosted Go + PostgreSQL security platform with an embedded Next.js console
 [![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX-DEFENSE?color=6b34db)](go.mod)
 [![Upstream releases](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=upstream%20release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
 
-[Quick start](#quick-start) · [Defense capabilities](#artex-defense-capabilities) · [Defensive setup](#defense-quick-start) · [Response safety](#defensive-response-safety) · [Architecture](#architecture) · [Installation](#installation) · [Security](SECURITY.md)
+[Quick start](#quick-start) · [What's included](#artex-defense-capabilities) · [SOC workflow](#defense-quick-start) · [AI review](#ai-assisted-investigation-and-evidence-preview) · [API & monitoring](#defense-api-and-operational-monitoring) · [Safety](#defensive-response-safety) · [Install](#installation) · [Original ARTEX](#original-penetration-testing-engine) · [Security](SECURITY.md)
 
 </div>
 
 ---
 
-ARTEX supports **two distinct operating modes**. The original autonomous penetration-testing engine remains available for explicitly authorized assessments; the Breaking Circuits fork also adds a defense-oriented SOC, evidence correlation, deterministic investigations, and bounded emergency containment.
+ARTEX-DEFENSE combines the original ARTEX dual-graph testing engine with a separate **defense-first** Security Operations Center. Current defenses include enrolled collectors, normalized telemetry, alert-only detections, company-scoped evidence correlation, durable deterministic investigation, audited human case reviews, live SOC monitoring, operational metrics, opt-in AI advisories, and narrowly scoped emergency response. **None of these capabilities by itself proves an intrusion or certifies a deployment for production/OT environments.**
+
+ARTEX supports **two distinct operating modes**. The original autonomous penetration-testing engine remains available for explicitly authorized assessments; the Breaking Circuits fork adds defensive workflows that do not depend on the offensive planner.
 
 | Mode | Set `ARTEX_MODE` | Purpose | Important boundary |
 | --- | --- | --- | --- |
@@ -71,6 +75,8 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 | **Phase 6** | Case-scoped observed indicators, evidence-backed relationships, provenance, confidence, and ATT&CK hypotheses | Threat correlation graph and chronological incident timeline; links are **not proof of attribution** | [Threat Correlation Graph](docs/DEFENSE_PHASE6.md) |
 | **Phase 7** | Durable autonomous *deterministic* investigation, evidence gaps, bounded retry, and human-verdict workflow | Unverified findings tied to source events; cancel/pause; opt-in high/critical case intake | [Autonomous Defensive Investigation](docs/DEFENSE_PHASE7.md) |
 | **Phase 8** | Near-real-time SOC revisions, sensor freshness, alert rates, and priority review queue | Authenticated SSE with polling fallback; operator-created cases and ingestion-health panels | [Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+| **PR #9** | Breaking Circuits rebrand, safe packaged defaults, security disclosure policy, and upstream attribution | Fork-specific image/source guidance; packaged `defense` default, containment `off` | [Security policy](SECURITY.md) |
+| **PR #10** | Revocable per-sensor credentials and a durable SQLite-backed telemetry forwarder | Collector-scoped ingestion, rotate/revoke, backpressure/replay and explicit provenance; **no sensor attestation** | [Secure collectors](docs/DEFENSE_PHASE10.md) |
 | **PR #11** | Company-scoped evidence and cautious cross-sensor case correlation | Explicit collector company binding, bounded two-field evidence links, unscoped evidence anchor-only, SQL cross-company guards; **not multi-tenant RBAC** | [Company-scoped correlation](docs/DEFENSE_PHASE11.md) |
 | **PR #12** | Reviewed Sigma-compatible normalized-event rules, scoped password-guessing detector and curated ATT&CK hints | Four fixed, alert-only Sigma-subset rules; evidence-linked hypotheses, no full Sigma backend or containment authority | [Expanded detection coverage](docs/DEFENSE_PHASE12.md) |
 | **PR #13** | Operational health, bounded read-only PostgreSQL snapshots, Prometheus metrics and SOC readiness card | Admin-only low-cardinality metrics, process-local latency and errors, health warnings; **not an SLA or sensor attestation** | [Operational readiness](docs/DEFENSE_PHASE13.md) |
@@ -79,38 +85,101 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 
 ### Defense architecture
 
+The deterministic investigation lane and the opt-in AI advisory lane are **separate**. The AI lane cannot call agent tools or write to response authorization, firewall, case-status, or ATT&CK mapping controls.
+
 ```mermaid
-flowchart LR
-  S["Authorized sensors / trusted collectors"] --> E["Authenticated event ingestion"]
-  E --> DB[("Normalized events + asset links")]
-  DB --> D["Deterministic detection"]
-  D --> C["Case + evidence correlation graph"]
-  C --> I["Bounded autonomous investigation"]
-  I --> H["Human review / audited verdicts"]
-  DB --> SOC["Live SOC dashboard + sensor health"]
+flowchart TB
+  S["Authorized Suricata / Wazuh / normalized sensors"] --> CO["Identity-bound collectors + durable spool"]
+  CO --> E["Authenticated, rate-limited ingest"]
+  E --> DB[("PostgreSQL: events, alerts, provenance")]
+  DB --> D["Deterministic and reviewed alert-only rules"]
+  D --> C["Company-scoped case + evidence correlation"]
+  C --> I["Bounded deterministic investigation"]
+  I --> HR["Immutable human review"]
+  C --> PV["Redacted evidence preview + SHA-256"]
+  PV --> A["Per-request operator consent + digest check"]
+  A --> L["Configured LLM; zero callable tools"]
+  L --> V["Citation, JSON, and limited output-safety checks"]
+  V --> AR["Separate AI advice + human verdict"]
+  DB --> SOC["SOC stream + operational health/metrics"]
   C --> SOC
-  H --> SOC
-  DB -. "separate fixed admission rules" .-> P["Operator-armed emergency policy"]
-  P --> F["Short-lived, reversible public IPv4 block / simulation"]
-  F --> RB["Operator revert / panic stop + expiry"]
+  HR --> SOC
+  AR --> SOC
+  DB -. "Separate emergency criteria; no AI input" .-> ER["Operator-armed deterministic emergency policy"]
+  ER --> NF["Simulation or expiring exact public-IPv4 nftables block"]
+  NF --> RB["Operator revert / panic stop / expiry"]
 ```
 
 The SOC live stream carries **only revision counters**, not raw events, passwords, source addresses or security findings. The browser then fetches event details through existing authenticated APIs. Under healthy, unbuffered conditions the stream checks shared PostgreSQL roughly every **two seconds**, with reconnection and polling fallback; this is **not** a two-second end-to-end detection or response guarantee.
 
 ### Defense quick start
 
-1. Copy `.env.example` to `.env`, provide a unique strong PostgreSQL password, and verify `ARTEX_MODE=defense` and `ARTEX_AUTO_CONTAIN_MODE=off` before your first deployment.
-2. Build from this fork with `docker compose up -d --build`. Log in at **http://localhost:8787** using the setup token shown by `docker compose logs artex`.
-3. Open **Functions → Defense SOC** (`/function/defense`) to view monitoring, event ingestion, alert priority, and detection-pack exports. Connect only authorized sensors over a trusted/private network.
-4. Use **Cases & Approvals** to open and review incidents; in an individual case, open **Threat intelligence & timeline** for the evidence graph, Phase 7 investigation runs, and immutable human verdicts.
-5. Keep high/critical **automatic case intake disabled** until an operator authorizes it. It is evidence-only and capped at **30 cases per rolling hour**.
-6. Run **Emergency Auto-Containment in simulation first**. Real nftables enforcement requires a separately provisioned host-local helper, reviewed protected networks/signature allowlists, and an explicit operator **ARM** action. Review its [rollout and reversal checklist](docs/DEFENSE_EMERGENCY.md) before considering any live deployment.
+1. Copy `.env.example` to `.env`; set a **unique strong** `POSTGRES_PASSWORD`. Check `ARTEX_MODE=defense`, `ARTEX_AUTO_CONTAIN_MODE=off`, and `ARTEX_DEFENSE_AI_ASSIST_ENABLED=0` before deployment.
+2. Run `docker compose up -d --build` from **this fork**. Open **http://localhost:8787** and retrieve the one-time setup token with `docker compose logs artex | grep "Setup token"`.
+3. Visit **Functions → Defense SOC** (`/function/defense`) to inspect ingested events, alerts, source freshness, ingestion counters, priority queue, detection-pack exports, and the operations-health card.
+4. For unattended sensors, enroll a named **collector** with the admin-only `/api/defense/collectors` API, bind it permanently to the correct **company**, and forward events with the restricted `Authorization: Collector …` credential using the durable SQLite-backed forwarder. A collector token is **not** an administrator token and does not prove telemetry is true. See [collector enrollment](docs/DEFENSE_PHASE10.md) and [company binding](docs/DEFENSE_PHASE11.md).
+5. Open **Cases & Approvals** (`/function/defense/cases`) for triage and manual response decisions; select **Threat intelligence & timeline** (`/function/defense/intelligence?case=<id>`) for evidence, linked ATT&CK hypotheses, deterministic investigation runs, and immutable human verdicts.
+6. Review the curated alert-only Suricata/YARA pack and bounded Sigma-compatible rules. Export and test rules manually; no rules are silently installed into your IDS. See [detection pack](docs/DEFENSE_DETECTION_PACK.md) and [detection expansion](docs/DEFENSE_PHASE12.md).
+7. Leave automated high/critical **case intake disabled** until explicitly authorized; when enabled, the deterministic evidence reviewer is capped at **30 automatic cases per rolling hour**. AI analysis remains separate and off by default.
+8. If AI review is approved for your environment, follow the [evidence-preview and consent workflow](#ai-assisted-investigation-and-evidence-preview). Otherwise, all deterministic investigation and SOC features still work.
+9. Keep containment **off** initially. Test the emergency controls in **simulation**, then independently review protected networks, approved signatures, nftables helper, and **ARM** policy before any live blocks. [Emergency response runbook](docs/DEFENSE_EMERGENCY.md).
 
-**Secure collectors (PR #10):** Provision one restricted credential per sensor through the admin-only `/api/defense/collectors` API and send events to `/api/defense/collector/events` using the durable SQLite-backed forwarder. Admin JWTs are **not** collector credentials. Collector-origin telemetry is not permitted to trigger the emergency response fast path. See [Secure collectors and durable delivery](docs/DEFENSE_PHASE10.md).
+**Current operator pages**
+
+| Area | Console path | Main purpose |
+| --- | --- | --- |
+| **SOC dashboard** | `/function/defense` | Real-time revisions, sensor activity, alerts, detection exports, operational readiness |
+| **Cases & approvals** | `/function/defense/cases` | Case triage, fixed response proposals, human decisions and audit |
+| **Intelligence & investigation** | `/function/defense/intelligence?case=<id>` | Evidence graph and timeline, ATT&CK hypotheses, deterministic investigation and opt-in AI reviews |
+| **Emergency response** | `/function/defense/emergency` | Paused/simulated containment, ARM, status, revert and panic stop |
+
+### AI-assisted investigation and evidence preview
+
+**PR #14–15: advisory only, disabled by default.** The existing deterministic investigator does not call an LLM. AI is a separate, opt-in feature that calls your **configured** model only after an administrator sees the exact redacted case packet and consents to that specific packet. The model has **zero callable tools** and cannot trigger shell commands, scans, case verdicts, ATT&CK mappings, firewall actions, or emergency policy.
+
+The Docker Compose configuration now explicitly forwards `ARTEX_DEFENSE_AI_ASSIST_ENABLED` from `.env`. Set it to `1` **only after** approving the provider's security, retention, and data-residency terms. Configure the LLM under **System → LLM**, preferably an approved local/private provider in sensitive environments. To apply an `.env` change, recreate the app container (`docker compose up -d --force-recreate artex`); a restart without recreation does not apply newly changed Compose environment values.
+
+```dotenv
+# Copy .env.example to .env first. Keep these defaults until approved.
+ARTEX_MODE=defense
+ARTEX_AUTO_CONTAIN_MODE=off
+ARTEX_DEFENSE_AI_ASSIST_ENABLED=0
+# After explicit security/data-egress approval only: set the final value to 1.
+```
+
+**Per-request analyst workflow:** Open an *active* case → **Threat intelligence & timeline** → AI review panel → **Preview exact redacted evidence** (read-only, **no model call**) → inspect the JSON and its SHA-256 → check the fresh consent box → confirm the AI request → inspect cited original events → record an immutable human verdict with rationale (`supported`, `refuted`, or `needs_more_evidence`). Each new request needs another preview and approval.
+
+**What leaves the server:** Up to 12 case-linked *categorical* observations (source, kind, linkage reason/confidence), severity, temporary `evN` references and a fixed uncertainty notice. **Not sent in the evidence packet:** IPs, hostnames, usernames, raw logs, signatures, event/case/company IDs, collector identifiers, or analyst free text. **Categorical operational metadata is still sensitive:** a remote model/provider and ARTEX's configured model-recording path may retain prompts or outputs. If that egress is unacceptable, leave AI disabled.
+
+**What the integrity check means:** The server recomputes the SHA-256 over the *redacted JSON packet* at submission time. If it differs from the preview, the model is **not called** (`409 Conflict`); missing digests receive `400`. This is **not** a signature, a one-use approval, or an attestation of raw sensor integrity. Changes only to fields excluded from the redacted packet will not affect this hash. AI output must meet strict structured-citation checks and limited lexical safety filters; those checks **do not validate factual accuracy**, and some unsafe paraphrases may evade them or benign text may be rejected.
+
+AI requests have a **35-second deadline**, maximum **3 per case per hour** and **12 system-wide per hour**, with separate append-only run, finding, decision and audit records. The reviewer must verify source evidence independently. See [AI advisory governance](docs/DEFENSE_PHASE14.md) and [Phase 15 evidence integrity and safety evaluation](docs/DEFENSE_PHASE15.md).
+
+### Defense API and operational monitoring
+
+All defense routes below are under `/api`; except minimal `/api/health` and `/api/ready`, the SOC, case, audit, AI and operations APIs require a valid **admin JWT** in defense mode. Collector credentials work **only** for the collector ingestion endpoint. Keep both the console and metrics access on a trusted/private network.
+
+| Capability | Endpoint | Behavior / boundary |
+| --- | --- | --- |
+| Collector registration | `GET/POST /api/defense/collectors` | Admin-only enroll/list; rotate, revoke, and one-way company binding have separate endpoints |
+| Sensor ingestion | `POST /api/defense/collector/events` | Restricted collector token, source binding, event budget, dedupe and provenance |
+| SOC health | `GET /api/defense/soc/health` | Last-seen activity/freshness, **not** sensor attestation |
+| Operational health | `GET /api/defense/operations/health` | Bounded DB read model, backlog/warnings and readiness status |
+| Prometheus metrics | `GET /api/defense/operations/metrics` | Admin-JWT-only, low-cardinality 0.0.4 text; **not** anonymously scrapeable |
+| Case evidence | `GET /api/defense/cases/{id}/intelligence`, `GET /api/defense/cases/{id}/timeline` | Company-scoped evidence and chronology, not confirmed attribution |
+| Deterministic investigation | `GET /api/defense/cases/{id}/investigations` | Reviewable unverified findings; queuing/controls are separate authenticated POSTs |
+| AI preview | `GET /api/defense/cases/{id}/ai-reviews/preview` | No provider call; returns exact redacted packet and `packet_sha256` |
+| AI advisory | `POST /api/defense/cases/{id}/ai-reviews` | Requires `consent_to_model: true` **and** matching `reviewed_packet_sha256` |
+| AI human decision | `POST /api/defense/ai-reviews/{id}/decision` | Reasoned, immutable advisory verdict; never response authorization |
+
+**Monitoring notes:** Operations metrics use fixed names/labels and process-local ingestion counters, which reset on restart. Sensor freshness is sampled and cannot prove a collector is online. The admin token currently used for Prometheus scraping is highly privileged: **do not expose it to untrusted metrics systems**; use an approved private proxy or collector. See [operational observability](docs/DEFENSE_PHASE13.md).
+
+**Compatible API clients:** PR #15 intentionally changed AI POST validation. Clients using the PR #14 request body without `reviewed_packet_sha256` now get **HTTP 400 and no model call**. Always fetch a fresh preview and use its digest for the request.
 
 ### Defensive response safety
 
-- **Human in the loop:** Case triage and response recommendations remain subject to operator decisions; investigator findings are unverified hypotheses, not attack attribution or response authorizations.
+- **Human in the loop:** Case triage and response recommendations remain subject to operator decisions; deterministic investigator findings and AI suggestions are unverified hypotheses, not attack attribution or response authorizations.
+- **AI is advisory, opt-in, and tool-less:** AI calls require the previewed evidence digest and human consent. Strict citation checks and lexical filters cannot prove an incident or prevent every misleading model answer; no AI recommendation can trigger containment.
 - **Autonomous only within a narrow policy:** Emergency enforcement is separately configured and initially **paused**. It uses deterministic corroboration, protected destination scope, source exemptions, rate/active limits, short expiry and an explicit dashboard ARM control. The live action supported here is a public-IPv4 source block in an operator-provisioned nftables set; no autonomous account disabling, host isolation, file deletion or OT-controller changes are implemented.
 - **Reversal is bounded, not a full undo:** The dashboard can remove active blocks and pause future admissions, and kernel entries expire. Previously dropped packets, disconnected sessions, interrupted processes or lost work **cannot** be restored by clicking Revert.
 - **No implicit trust from a graph:** A common IP, sensor severity, ATT&CK label, confidence heuristic or investigation verdict does not confirm compromise and never directly enables auto-containment.
@@ -128,6 +197,8 @@ The SOC live stream carries **only revision counters**, not raw events, password
 | Inspect indicators, evidence provenance, ATT&CK hypotheses and timelines | [Phase 6: Correlation Graph](docs/DEFENSE_PHASE6.md) |
 | Control automated case analysis, pause, cancel, and review findings | [Phase 7: Investigation](docs/DEFENSE_PHASE7.md) |
 | Diagnose stream reconnects, collector freshness and alert priority | [Phase 8: Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+| Understand the Breaking Circuits identity, restricted deployment defaults and security reporting | [Fork security policy](SECURITY.md) |
+| Enroll, rotate, revoke and spool per-sensor credentials with crash replay | [PR #10: Secure collectors](docs/DEFENSE_PHASE10.md) |
 | Enroll company-scoped collectors and review independent sensor matches | [PR #11: Tenant-aware evidence](docs/DEFENSE_PHASE11.md) |
 | Review normalized Sigma-subset alerts and evidence-linked ATT&CK mappings | [PR #12: Detection expansion](docs/DEFENSE_PHASE12.md) |
 | Monitor collector reporting, ingestion failures, investigation backlog and emergency readiness | [PR #13: Operational observability](docs/DEFENSE_PHASE13.md) |
@@ -138,7 +209,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 
 ## Original penetration-testing engine
 
-The original ARTEX LLM-driven planner, workers, dual graph, recorded proxy, tests, findings, and tooling remain documented below for **authorized penetration testing**. The following worker, screenshot and installation sections describe that original engine and should not be confused with the restricted defense-mode investigation worker.
+The original ARTEX LLM-driven planner, workers, dual graph, recorded proxy, tests, findings, and tooling remain documented below for **authorized penetration testing only**. These planner/worker descriptions, offensive workflows, screenshots, and LLM rotation features do **not** describe the restricted defense-mode investigator or its separate zero-tool AI advisory lane.
 
 ---
 
@@ -389,7 +460,7 @@ worker remains confined to the intent it claimed.
 
 ## Installation
 
-> **Breaking Circuits fork:** Use the local source checkout for Phase 1–8. The upstream `ghcr.io/baarai/artex` image and BaaRai releases do not provide a verified ARTEX-DEFENSE build.
+> **Breaking Circuits fork:** Build from this repository to get the implemented defense capabilities through PR #15. The upstream `ghcr.io/baarai/artex` image and BaaRai releases are **not** ARTEX-DEFENSE builds.
 
 > Requires **PostgreSQL**; exploration requires an **LLM** (`ANTHROPIC_API_KEY` or
 > `OPENAI_API_KEY`, also configurable in the UI).
@@ -490,6 +561,8 @@ runtime supports it.
 ---
 
 ## Configuration
+
+**Defense mode and opt-in AI (source-built Docker Compose):** `.env.example` sets `ARTEX_MODE=defense`, `ARTEX_AUTO_CONTAIN_MODE=off`, and `ARTEX_DEFENSE_AI_ASSIST_ENABLED=0`. Source-build and future fork-image Compose files forward these values into the backend. AI is not enabled merely by configuring an LLM; the operator must separately set the AI flag to `1`, recreate the container, preview case data, and consent to each call. Disabling the flag prevents future preview/model POST access without deleting historical advisory records. See [AI setup](#ai-assisted-investigation-and-evidence-preview).
 
 **Database** (`config.json`, `ARTEX_PG_DSN`, or `ARTEX_PG_*` environment variables — see [External PostgreSQL](#external-postgresql)):
 

@@ -60,6 +60,8 @@ services:
       ARTEX_SECRET_KEY: ${ARTEX_SECRET_KEY:-}
       ARTEX_TRUSTED_PROXIES: ${ARTEX_TRUSTED_PROXIES:-}
       ARTEX_MODE: ${ARTEX_MODE:-defense}
+      # PR #14–15: disabled unless explicitly enabled after data-egress approval.
+      ARTEX_DEFENSE_AI_ASSIST_ENABLED: ${ARTEX_DEFENSE_AI_ASSIST_ENABLED:-0}
       ARTEX_AUTO_CONTAIN_MODE: ${ARTEX_AUTO_CONTAIN_MODE:-off}
       # Untrusted-output boundary: on by default (empty = on); set 0 to disable.
       ARTEX_UNTRUSTED_BOUNDARY: ${ARTEX_UNTRUSTED_BOUNDARY:-}
