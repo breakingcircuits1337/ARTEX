@@ -33,6 +33,7 @@ type EmergencyConfig struct {
 	MaxPerHour     int
 	Freshness      time.Duration
 	AllowedSignatures []string
+	AllowPrivateDestinations bool
 }
 
 var reservedSources = []string{
@@ -108,6 +109,11 @@ func LoadEmergencyConfig() (EmergencyConfig, error) {
 		return EmergencyConfig{}, err
 	}
 	cfg.Freshness = 30 * time.Second
+	privateDestOptIn := strings.TrimSpace(strings.ToLower(os.Getenv("ARTEX_AUTO_CONTAIN_ALLOW_PRIVATE_DESTS")))
+	if privateDestOptIn != "" && privateDestOptIn != "true" && privateDestOptIn != "false" {
+		return EmergencyConfig{}, errors.New("ARTEX_AUTO_CONTAIN_ALLOW_PRIVATE_DESTS must be true or false")
+	}
+	cfg.AllowPrivateDestinations = privateDestOptIn == "true"
 	sigs := strings.TrimSpace(os.Getenv("ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES"))
 	if sigs != "" {
 		parts := strings.Split(sigs, ",")
@@ -157,6 +163,11 @@ func (cfg EmergencyConfig) EligibleIP(source, destination string) bool {
 	if err != nil || !dst.Is4() || !containsPrefix(cfg.Protected, dst) {
 		return false
 	}
+	// Live blocking for internal/private destinations needs its OWN explicit
+	// site-level opt-in, beyond arming a general public-facing policy.
+	if cfg.Mode == EmergencyNFT && dst.IsPrivate() && !cfg.AllowPrivateDestinations {
+		return false
+	}
 	if containsPrefix(cfg.Exempt, src) || containsPrefix(cfg.Protected, src) {
 		return false
 	}
@@ -175,6 +186,7 @@ func (cfg EmergencyConfig) Fingerprint() string {
 		string(cfg.Mode), cfg.TTL.String(),
 		strconv.Itoa(cfg.MaxActive), strconv.Itoa(cfg.MaxPerHour),
 		cfg.Freshness.String(), "socket="+socket,
+		fmt.Sprintf("private-destinations=%t", cfg.AllowPrivateDestinations),
 	}
 	for _, value := range cfg.Protected {
 		parts = append(parts, "protected="+value.String())
@@ -185,7 +197,7 @@ func (cfg EmergencyConfig) Fingerprint() string {
 	for _, value := range cfg.AllowedSignatures {
 		parts = append(parts, "sig="+value)
 	}
-	sort.Strings(parts[6:])
+	sort.Strings(parts[7:])
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(sum[:])
 }
