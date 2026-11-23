@@ -1,0 +1,73 @@
+name: defense-operations
+
+on:
+  pull_request:
+    paths:
+      - "server/defense_observability*.go"
+      - "server/defense_telemetry.go"
+      - "server/server.go"
+      - "db/migrations/0023_defense_operations_indexes.sql"
+      - "web/src/app/(main)/function/defense/**"
+      - ".github/workflows/defense-operations.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/defense_observability*.go"
+      - "server/defense_telemetry.go"
+      - "server/server.go"
+      - "db/migrations/0023_defense_operations_indexes.sql"
+      - "web/src/app/(main)/function/defense/**"
+      - ".github/workflows/defense-operations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  operational-sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: artex
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: artextest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Format guard
+        run: |
+          files=$(gofmt -l server/defense_observability.go server/defense_observability_test.go server/defense_telemetry.go server/server.go)
+          if [ -n "$files" ]; then echo "gofmt required: $files"; exit 1; fi
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Access control, metrics privacy, read-only PostgreSQL integration
+        run: go test -count=1 ./server -run 'TestOps'
+      - name: Migration consistency
+        run: go test -count=1 ./db -run 'TestOpenMigratesFreshDatabase'
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build:static

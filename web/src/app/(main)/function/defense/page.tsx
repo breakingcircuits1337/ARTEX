@@ -7,6 +7,7 @@ import { http } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SOCRealtimePanel } from "./soc-realtime-panel";
+import { OperationsHealthPanel } from "./operations-health-panel";
 
 type PackRule = {
   engine: "suricata" | "yara";
@@ -155,6 +156,7 @@ export default function DefenseSOCPage() {
         </div>
       )}
       <SOCRealtimePanel />
+      <OperationsHealthPanel />
 
       {pack && (
         <Card>
