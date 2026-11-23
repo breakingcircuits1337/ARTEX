@@ -61,8 +61,8 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		return result, err
 	}
 	// Strict scope before every other match: the anchor's assigned company
-	// must be the same, and unscoped legacy events can only match other
-	// unscoped events from their own vendor and collector. Independent
+	// must be the same. Unscoped legacy anchors remain anchor-only, because
+	// historical company ownership cannot be verified from an IP. Independent
 	// collectors must both be enrolled and bound to one explicit company.
 	// A source IP alone is never evidence; two matching fields and ±15 min
 	// produce low-confidence investigative links, NEVER response authority.
@@ -71,7 +71,7 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		       e.signature,e.observed_at,e.collector_id,e.company_id
 		  FROM defense_events e
 		 WHERE e.id=$1 OR (
-		     e.company_id IS NOT DISTINCT FROM $10::bigint
+		     e.company_id=$10::bigint
 		     AND (
 		       (e.source=$2 AND e.collector_id IS NOT DISTINCT FROM $9::bigint)
 		       OR ($10::bigint IS NOT NULL AND $9::bigint IS NOT NULL

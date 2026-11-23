@@ -86,8 +86,8 @@ The new `independent_collector_endpoints` and
 values of 60 and 55. Those values describe a *heuristic evidence link*, **not
 the probability of compromise**. Multiple sensors can still share an upstream
 feed or common misconfiguration: distinct credentials do not guarantee
-independent physical observations. Legacy events with unknown company can
-only match other unscoped events within their own source/collector identity.
+independent physical observations. Legacy events with unknown company remain anchor-only when refreshing a
+case: matching IP addresses cannot establish ownership, even within one vendor.
 
 Nothing in this path performs network lookups, executes tools, changes firewall
 policy, upgrades incident severity, or grants autonomous response permissions.
