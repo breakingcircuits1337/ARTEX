@@ -1,14 +1,16 @@
 # ARTEX Defense — Phase 1 (opt-in preview)
 
 Phase 1 adds **passive, evidence-first exposure triage** while preserving the
-original penetration-testing behavior when `ARTEX_MODE` is unset or `pentest`.
+original penetration-testing behavior when the raw binary is run with
+`ARTEX_MODE` unset, or when an operator explicitly opts into `pentest`.
+The fork's packaged installers and Compose examples now default to `defense`.
 This is an experimental analyst workflow, **not** a SIEM, firewall, EDR, or
 production-ready containment engine.
 
 ## Enable
 
-1. Create a working copy of this branch and set `ARTEX_MODE=defense` in
-   the root `.env`. Leave the original `main` branch unchanged.
+1. Clone this fork and copy `.env.example` to `.env`. Verify
+   `ARTEX_MODE=defense` and `ARTEX_AUTO_CONTAIN_MODE=off`.
 2. Set a strong `POSTGRES_PASSWORD`; configure an LLM in the UI or by env.
 3. Run `docker compose up -d --build`, then open the local web UI. Use the
    one-time setup token shown in `docker compose logs artex`.
@@ -73,7 +75,8 @@ go test ./agent ./server
 ```
 
 Suggested integration checks:
-- Run with no `ARTEX_MODE`: old penetration-testing policy remains available.
+- Run the raw Go binary with no `ARTEX_MODE`: legacy penetration-testing mode remains available;
+  packaged Compose/installer defaults are intentionally different.
 - Run with `ARTEX_MODE=defense`: Bash, WebFetch, shell, MCP and unknown tool
   calls fail in both worker and planner/main-agent paths.
 - Confirm `assess_exposure` returns metadata-only assessments for existing

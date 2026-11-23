@@ -144,7 +144,7 @@ if [ "$GO_ONLY" -eq 0 ] && [ "$WEB_ONLY" -eq 0 ]; then
       install.sh update.sh start.sh scripts/backup.sh scripts/verify.sh \
       reset-password.sh scripts/extract-changelog-section.sh \
       scripts/test-extract-changelog-section.sh .github/scripts/bot.sh \
-      scripts/test-bot-context.sh
+      scripts/test-bot-context.sh scripts/test-defense-defaults.sh
   else
     printf 'note: shellcheck is not installed; skipping the shellcheck step\n'
   fi
@@ -153,6 +153,7 @@ if [ "$GO_ONLY" -eq 0 ] && [ "$WEB_ONLY" -eq 0 ]; then
   run_step "benchmark tests" python3 -m unittest discover -s scripts/benchmark -p 'test_*.py' -v
   run_step "changelog section tests" bash scripts/test-extract-changelog-section.sh
   run_step "bot context tests" bash scripts/test-bot-context.sh
+  run_step "defense default tests" bash scripts/test-defense-defaults.sh
 fi
 
 printf '\n'
