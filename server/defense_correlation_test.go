@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"os"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
 )
 
 func TestCorrelationReadRoutesRequireDefenseAndSession(t *testing.T) {
@@ -38,7 +38,12 @@ func TestCorrelationReadRoutesRequireDefenseAndSession(t *testing.T) {
 func TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit(t *testing.T) {
 	m, err := NewManager(t.TempDir(), "")
 	if err != nil {
-		db.SkipPGUnavailable(t, err)
+		// An explicitly configured test DSN means the CI Postgres service
+		// is expected to be available. Never silently skip migration errors.
+		if strings.TrimSpace(os.Getenv("ARTEX_PG_DSN")) == "" {
+			t.Skipf("no configured PostgreSQL test DSN: %v", err)
+		}
+		t.Fatalf("configured test database failed initialization: %v", err)
 	}
 	defer m.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -174,7 +179,12 @@ func TestThreatCorrelationPGIdempotentEvidenceGraphAndAudit(t *testing.T) {
 func TestIndicatorCrossCaseEvidenceIsRejectedPG(t *testing.T) {
 	m, err := NewManager(t.TempDir(), "")
 	if err != nil {
-		db.SkipPGUnavailable(t, err)
+		// An explicitly configured test DSN means the CI Postgres service
+		// is expected to be available. Never silently skip migration errors.
+		if strings.TrimSpace(os.Getenv("ARTEX_PG_DSN")) == "" {
+			t.Skipf("no configured PostgreSQL test DSN: %v", err)
+		}
+		t.Fatalf("configured test database failed initialization: %v", err)
 	}
 	defer m.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
