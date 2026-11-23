@@ -32,8 +32,10 @@ func (s *Server) emergencyStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var paused bool
+	var policyHash string
 	if err := pg.QueryRowContext(r.Context(),
-		"SELECT paused FROM defense_emergency_control WHERE id=1").Scan(&paused); err != nil {
+		"SELECT paused,policy_hash FROM defense_emergency_control WHERE id=1").
+		Scan(&paused, &policyHash); err != nil {
 		writeErr(w, 503, "emergency control unavailable")
 		return
 	}
@@ -52,8 +54,11 @@ func (s *Server) emergencyStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
-		"mode": cfg.Mode, "armed": !paused && cfg.Mode != defense.EmergencyOff && ready,
-		"paused": paused, "backend_ready": ready,
+		"mode": cfg.Mode, "armed": !paused && policyHash == cfg.Fingerprint() &&
+			cfg.Mode != defense.EmergencyOff && ready,
+		"paused": paused || policyHash != cfg.Fingerprint(),
+		"requires_rearm": policyHash != cfg.Fingerprint(),
+		"backend_ready": ready,
 		"protected_cidrs": len(cfg.Protected), "ttl_seconds": int(cfg.TTL.Seconds()),
 		"max_active": cfg.MaxActive, "max_per_hour": cfg.MaxPerHour,
 		"active": active, "action_count": total,
@@ -64,7 +69,7 @@ func (s *Server) emergencyStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateEmergencyControl is transactional with the operator's audit record.
-func updateEmergencyControl(ctx context.Context, pg *db.DB, paused bool) error {
+func updateEmergencyControl(ctx context.Context, pg *db.DB, paused bool, approvedHash string) error {
 	tx, err := pg.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -74,10 +79,13 @@ func updateEmergencyControl(ctx context.Context, pg *db.DB, paused bool) error {
 	if paused {
 		reason, kind = "Operator paused new emergency actions from SOC", "paused"
 	}
+	if paused {
+		approvedHash = ""
+	}
 	_, err = tx.ExecContext(ctx, `
 		UPDATE defense_emergency_control
-		 SET paused=$1,updated_at=now(),operator_reason=$2
-		WHERE id=1`, paused, reason)
+		 SET paused=$1,updated_at=now(),operator_reason=$2,policy_hash=$3
+		WHERE id=1`, paused, reason, approvedHash)
 	if err != nil {
 		return err
 	}
@@ -110,7 +118,7 @@ func (s *Server) emergencyArm(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if err := updateEmergencyControl(ctx, pg, false); err != nil {
+	if err := updateEmergencyControl(ctx, pg, false, cfg.Fingerprint()); err != nil {
 		writeErr(w, 503, "could not arm emergency mode")
 		return
 	}
@@ -128,7 +136,7 @@ func (s *Server) emergencyPause(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if err := updateEmergencyControl(ctx, pg, true); err != nil {
+	if err := updateEmergencyControl(ctx, pg, true, ""); err != nil {
 		writeErr(w, 503, "could not pause emergency mode")
 		return
 	}
