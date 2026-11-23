@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Activity, AlertTriangle, Database, ShieldCheck } from "lucide-react";
 import { http } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +79,9 @@ export default function DefenseSOCPage() {
           Phase 2 telemetry preview: passive ingestion, deterministic detection and asset correlations.
           Alerts are investigative signals, not confirmed intrusions.
         </p>
+        <Link href="/function/defense/cases" className="mt-3 inline-flex rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
+          Review cases and manual response approvals →
+        </Link>
       </header>
       {loading && <p className="text-muted-foreground">Loading authorized telemetry…</p>}
       {error && (
