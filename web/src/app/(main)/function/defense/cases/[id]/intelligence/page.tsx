@@ -18,6 +18,10 @@ type Observation = {
   recorded_at: string; source: string; external_id: string; kind: string;
   observed_at: string; src_ip: string; dst_ip: string; host: string;
 };
+type IndicatorEvidence = {
+  indicator_id: number; event_id: number; evidence_role: string; observed_at: string;
+  source: string; external_id: string;
+};
 type Relation = {
   id: number; source_indicator_id: number; target_indicator_id: number;
   evidence_event_id: number; relation: string; causal_claim: boolean;
@@ -30,6 +34,7 @@ type Mapping = {
 type Intel = {
   case_id: number; mode: string; note: string;
   observations: Observation[]; indicators: Indicator[];
+  indicator_evidence: IndicatorEvidence[];
   relations: Relation[]; techniques: Mapping[];
 };
 type TimelineEvent = {
@@ -201,7 +206,15 @@ export default function ThreatIntelligencePage() {
                       <td className="p-2">{i.type}</td>
                       <td className="p-2 break-all font-mono text-xs">{i.value}</td>
                       <td className="p-2">{i.confidence}/100 <span className="text-xs text-muted-foreground">(link only)</span></td>
-                      <td className="p-2">{i.evidence_count} record(s) · first event #{i.first_event_id}</td>
+                      <td className="p-2">
+                        {i.evidence_count} record(s)
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {(intel.indicator_evidence ?? [])
+                            .filter(source => source.indicator_id === i.id)
+                            .map(source => `${source.source}:${source.external_id} (event #${source.event_id}, ${source.evidence_role})`)
+                            .join(" · ") || `First event #${i.first_event_id}`}
+                        </div>
+                      </td>
                       <td className="p-2 text-xs">{stamp(i.first_seen)} → {stamp(i.last_seen)}</td>
                     </tr>
                   ))}
