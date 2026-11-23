@@ -645,13 +645,14 @@ func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchive
 		return 0, 0, "", err
 	}
 	defer payloadRoot.Close()
-	walkErr := filepath.WalkDir(payloadDir, func(current string, entry fs.DirEntry, walkErr error) error {
+	// Use the rooted filesystem for traversal too: a directory substituted with
+	// an external symlink cannot even be enumerated outside the payload.
+	walkErr := fs.WalkDir(payloadRoot.FS(), ".", func(relative string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		relative, err := filepath.Rel(payloadDir, current)
-		if err != nil || relative == "." {
-			return err
+		if relative == "." {
+			return nil
 		}
 		info, err := payloadRoot.Lstat(relative)
 		if err != nil {
@@ -661,7 +662,7 @@ func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchive
 			// The archive format supports only regular files and directories end to end (the
 			// unpacker errors out on other types), so symlinks cannot be restored. Skip rather
 			// than fail the whole package: the link target is not read (lstat, never leaves the tree) and no symlink entry is written; when a link points inside the tree, the target file itself is still walked and archived separately.
-			log.Printf("[task-archive] skipping symlink (unsupported by the archive, other files unaffected): %s", current)
+			log.Printf("[task-archive] skipping symlink (unsupported by the archive, other files unaffected): %s", relative)
 			return nil
 		}
 		if info.IsDir() {
