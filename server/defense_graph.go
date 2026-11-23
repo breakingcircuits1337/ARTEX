@@ -152,6 +152,10 @@ func (s *Server) defenseCaseGraph(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 503, "case correlation graph unavailable")
 		return
 	}
+	if err := appendInvestigationGraph(r.Context(), pg, id, &nodes, &edges); err != nil {
+		writeErr(w, 503, "investigation graph unavailable")
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"case_id": id, "mode": "read_only", "nodes": nodes, "edges": edges,
