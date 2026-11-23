@@ -124,6 +124,12 @@ func (s *Server) createDefenseCase(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 503, "initial case correlation unavailable")
 			return
 		}
+		// Case creation queues only a local, evidence-only investigation.
+		// This does not alter human triage or activate any response.
+		if _, _, err := enqueueDefenseInvestigation(ctx, tx, id, "case_opened"); err != nil {
+			writeErr(w, 503, "initial investigation queue unavailable")
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		writeErr(w, 503, "case commit failed")
