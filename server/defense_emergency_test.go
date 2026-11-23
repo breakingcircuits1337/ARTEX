@@ -111,8 +111,13 @@ func TestEmergencyAdmissionPG(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
+	cfg, err := defense.LoadEmergencyConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := tx.ExecContext(ctx,
-		"UPDATE defense_emergency_control SET paused=false WHERE id=1"); err != nil {
+		"UPDATE defense_emergency_control SET paused=false,policy_hash=$1 WHERE id=1",
+		cfg.Fingerprint()); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
