@@ -13,6 +13,24 @@ import (
 // Serialize emergency budgets across concurrent ingest requests and processes.
 const emergencyQueueLock int64 = 8127726441
 
+// Bounded concurrent host-helper requests keep burst traffic from serializing
+// one firewall update after another while avoiding unbounded nft processes.
+var emergencyEnforcementSlots = make(chan struct{}, 4)
+
+func (s *Server) dispatchEmergencyActions(ids []int64) {
+	for _, id := range ids {
+		go func(actionID int64) {
+			select {
+			case emergencyEnforcementSlots <- struct{}{}:
+				defer func() { <-emergencyEnforcementSlots }()
+			case <-s.ctx.Done():
+				return
+			}
+			s.applyEmergencyAction(actionID)
+		}(id)
+	}
+}
+
 // stageEmergencyAction runs on the normalized event path WITHOUT an LLM. It
 // persists intent atomically with the supporting event, never a kernel change.
 func (s *Server) stageEmergencyAction(
