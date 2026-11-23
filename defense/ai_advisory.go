@@ -196,7 +196,7 @@ func ParseAIAdvice(raw string, refs map[string]int64) (AIAdvice, error) {
 		seen[key] = true
 	}
 	if err := ValidateAIAdvisoryGrounding(out, refs); err != nil {
-        return AIAdvice{}, err
-    }
+		return AIAdvice{}, err
+	}
 	return out, nil
 }
