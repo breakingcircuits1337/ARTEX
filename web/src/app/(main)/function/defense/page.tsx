@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, Database, ShieldCheck } from "lucide-react";
 import { http } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SOCRealtimePanel } from "./soc-realtime-panel";
 
 type PackRule = {
   engine: "suricata" | "yara";
@@ -93,8 +94,15 @@ export default function DefenseSOCPage() {
     void http<PackCatalog>("/defense/detection-pack")
       .then(result => { if (active) setPack(result); })
       .catch(() => { if (active) setPack(null); });
-    const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 15000);
-    return () => { active = false; window.clearInterval(timer); };
+    const onLive = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener("artex:soc-revision", onLive);
+    // The ordinary slow poll covers browser suspension and event-stream outages.
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("artex:soc-revision", onLive);
+    };
   }, []);
 
   async function downloadRules(engine: "suricata" | "yara") {
@@ -146,6 +154,8 @@ export default function DefenseSOCPage() {
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Database className="size-4" /> Asset-linked events</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{summary.linked_events}</CardContent></Card>
         </div>
       )}
+      <SOCRealtimePanel />
+
       {pack && (
         <Card>
           <CardHeader><CardTitle>Detection Pack · {pack.catalog.version} · Alert-only</CardTitle></CardHeader>
