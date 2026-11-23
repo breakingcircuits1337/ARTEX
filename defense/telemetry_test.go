@@ -25,6 +25,20 @@ func TestNormalizeWazuhAndGeneric(t *testing.T){
  if err!=nil||b.Outcome!="failure"||len(EvaluateEvent(b))!=0{t.Fatalf("%+v err=%v",b,err)}
 }
 
+func TestCommonSensorTimezoneFormats(t *testing.T) {
+ now:=time.Date(2026,11,23,18,0,0,0,time.UTC)
+ for _,value:=range []string{
+  "2026-11-23T12:00:00.550047+0000",
+  "2026-11-23T08:00:00.550047-0400",
+  "2026-11-23T12:00:00.550047Z",
+ } {
+  raw,_:=json.Marshal(map[string]any{"kind":"network","timestamp":value})
+  e,err:=NormalizeEvent("generic",raw,now)
+  if err!=nil {t.Errorf("%s: %v",value,err);continue}
+  if e.ObservedAt.IsZero() {t.Errorf("%s parsed zero timestamp",value)}
+ }
+}
+
 func TestNormalizeRejectsInvalidInput(t *testing.T) {
  now:=time.Now()
  for _,raw:=range []string{
