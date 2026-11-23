@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS defense_emergency_actions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_defense_emergency_live_source
     ON defense_emergency_actions(source_ip)
-    WHERE status IN ('pending','active');
+    WHERE status IN ('pending','active','failed');
 CREATE INDEX IF NOT EXISTS idx_defense_emergency_recent
     ON defense_emergency_actions(created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS idx_defense_emergency_expiry
