@@ -398,6 +398,19 @@ func (s *Server) getDefenseTimeline(w http.ResponseWriter, r *http.Request) {
 		  SELECT 'intel_audit',a.id,a.recorded_at,
 		         left(a.audit_kind||': '||a.detail,180),
 		         a.actor,0 FROM defense_case_intel_audit a WHERE a.case_id=$1
+		  UNION ALL
+		  SELECT 'investigation_finding',f.id,f.created_at,
+		         left(f.category||': '||f.title,180),
+		         'deterministic-v1',f.confidence::int
+		    FROM defense_investigation_findings f WHERE f.case_id=$1
+		  UNION ALL
+		  SELECT 'investigation_review',rv.id,rv.reviewed_at,
+		         left(rv.verdict||': '||rv.reason,180),
+		         rv.actor,0 FROM defense_investigation_reviews rv WHERE rv.case_id=$1
+		  UNION ALL
+		  SELECT 'investigation_audit',a.id,a.occurred_at,
+		         left(a.event_type||': '||a.detail,180),
+		         a.actor,0 FROM defense_investigation_audit a WHERE a.case_id=$1
 		  ) AS history
 		  ORDER BY occurred_at DESC,kind DESC,reference_id DESC LIMIT 250
 		) AS recent
