@@ -31,7 +31,12 @@ func appendCorrelationGraph(
 		       e.source,e.external_id,e.observed_at
 		  FROM defense_case_observations o
 		  JOIN defense_events e ON e.id=o.event_id
-		 WHERE o.case_id=$1 ORDER BY e.observed_at DESC,e.id DESC LIMIT 100`, caseID)
+		 WHERE o.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY e.observed_at DESC,e.id DESC LIMIT 100`, caseID)
 	if err != nil {
 		return err
 	}
@@ -68,7 +73,13 @@ func appendCorrelationGraph(
 		SELECT i.id,i.indicator_type,i.indicator_value,i.confidence,
 		       i.first_event_id,i.first_seen,i.last_seen
 		  FROM defense_case_indicators i
-		 WHERE i.case_id=$1 ORDER BY i.id LIMIT 250`, caseID)
+		  JOIN defense_events e ON e.id=i.first_event_id
+		 WHERE i.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY i.id LIMIT 250`, caseID)
 	if err != nil {
 		return err
 	}
@@ -102,8 +113,15 @@ func appendCorrelationGraph(
 	// not just the first event which mentioned the value.
 	rows, err = pg.QueryContext(ctx, `
 		SELECT indicator_id,event_id,evidence_role
-		FROM defense_indicator_evidence WHERE case_id=$1
-		ORDER BY event_id,indicator_id LIMIT 250`, caseID)
+		FROM defense_indicator_evidence ev
+		  JOIN defense_events e ON e.id=ev.event_id
+		 WHERE ev.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  )
+		ORDER BY ev.event_id,ev.indicator_id LIMIT 250`, caseID)
 	if err != nil {
 		return err
 	}
@@ -128,7 +146,14 @@ func appendCorrelationGraph(
 
 	rows, err = pg.QueryContext(ctx, `
 		SELECT source_indicator_id,target_indicator_id,evidence_event_id
-		FROM defense_case_relations WHERE case_id=$1 ORDER BY id LIMIT 250`, caseID)
+		FROM defense_case_relations rel
+		  JOIN defense_events e ON e.id=rel.evidence_event_id
+		 WHERE rel.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY rel.id LIMIT 250`, caseID)
 	if err != nil {
 		return err
 	}

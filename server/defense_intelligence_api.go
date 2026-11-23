@@ -180,7 +180,14 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 		SELECT i.id,i.indicator_type,i.indicator_value,i.confidence,
 		       i.confidence_meaning,i.first_seen,i.last_seen,i.first_event_id,
 		       (SELECT count(*) FROM defense_indicator_evidence ev WHERE ev.indicator_id=i.id)
-		  FROM defense_case_indicators i WHERE i.case_id=$1 ORDER BY i.id LIMIT 250`, id)
+		  FROM defense_case_indicators i
+		  JOIN defense_events e ON e.id=i.first_event_id
+		 WHERE i.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY i.id LIMIT 250`, id)
 	if err != nil {
 		writeErr(w, 503, "indicator store unavailable")
 		return
@@ -215,7 +222,12 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 		       e.source,e.external_id
 		  FROM defense_indicator_evidence ev
 		  JOIN defense_events e ON e.id=ev.event_id
-		 WHERE ev.case_id=$1 ORDER BY ev.event_id,ev.indicator_id LIMIT 250`, id)
+		 WHERE ev.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY ev.event_id,ev.indicator_id LIMIT 250`, id)
 	if err != nil {
 		writeErr(w, 503, "indicator provenance unavailable")
 		return
@@ -247,7 +259,12 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 		       e.source,e.external_id,e.kind,e.observed_at,e.src_ip,e.dst_ip,e.host
 		  FROM defense_case_observations o
 		  JOIN defense_events e ON e.id=o.event_id
-		 WHERE o.case_id=$1 ORDER BY e.observed_at ASC,e.id ASC LIMIT 100`, id)
+		 WHERE o.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  ) ORDER BY e.observed_at ASC,e.id ASC LIMIT 100`, id)
 	if err != nil {
 		writeErr(w, 503, "observation store unavailable")
 		return
@@ -385,6 +402,11 @@ func (s *Server) getDefenseTimeline(w http.ResponseWriter, r *http.Request) {
 		    FROM defense_case_observations o
 		    JOIN defense_events e ON e.id=o.event_id
 		   WHERE o.case_id=$1
+		  AND e.company_id IS NOT DISTINCT FROM (
+		    SELECT anchor.company_id FROM defense_cases c
+		    JOIN defense_alerts a ON a.id=c.alert_id
+		    JOIN defense_events anchor ON anchor.id=a.event_id WHERE c.id=$1
+		  )
 		  UNION ALL
 		  SELECT 'case_audit',a.id,a.occurred_at,
 		         left(a.event_type||': '||a.reason,180),
