@@ -5,7 +5,29 @@ import Link from "next/link";
 import { Activity, AlertTriangle, Database, ShieldCheck } from "lucide-react";
 import { http } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
+type PackRule = {
+  engine: "suricata" | "yara";
+  id: string;
+  name: string;
+  severity: string;
+  false_positive_risk: string;
+  limitations: string;
+  auto_containment_eligible: boolean;
+};
+type PackCatalog = {
+  catalog: {
+    name: string;
+    version: string;
+    policy: "alert_only";
+    rule_count: number;
+    quarantined_count: number;
+    rules: PackRule[];
+  };
+  automatic_activation: boolean;
+  autonomous_containment: boolean;
+};
 type Summary = {
   events: number;
   alerts: number;
@@ -40,6 +62,7 @@ const fmt = (date: string) => {
 
 export default function DefenseSOCPage() {
   const [summary, setSummary] = React.useState<Summary | null>(null);
+  const [pack, setPack] = React.useState<PackCatalog | null>(null);
   const [events, setEvents] = React.useState<EventRow[]>([]);
   const [alerts, setAlerts] = React.useState<AlertRow[]>([]);
   const [error, setError] = React.useState("");
@@ -67,9 +90,33 @@ export default function DefenseSOCPage() {
       }
     }
     void refresh();
+    void http<PackCatalog>("/defense/detection-pack")
+      .then(result => { if (active) setPack(result); })
+      .catch(() => { if (active) setPack(null); });
     const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 15000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  async function downloadRules(engine: "suricata" | "yara") {
+    try {
+      const token = window.localStorage.getItem("artex_token");
+      const response = await fetch(`/api/defense/detection-pack/${engine}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw new Error("Unable to retrieve authenticated detection rule file");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = engine === "suricata" ? "artex-alert-only.rules" : "artex-alert-only.yar";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Detection pack download failed");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 p-5">
@@ -95,6 +142,41 @@ export default function DefenseSOCPage() {
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="size-4" /> Alerts</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{summary.alerts}</CardContent></Card>
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Database className="size-4" /> Asset-linked events</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{summary.linked_events}</CardContent></Card>
         </div>
+      )}
+      {pack && (
+        <Card>
+          <CardHeader><CardTitle>Detection Pack · {pack.catalog.version} · Alert-only</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground text-sm">
+              {pack.catalog.rule_count} curated signatures ({pack.catalog.rules.filter(r => r.engine === "suricata").length} Suricata,
+              {" "}{pack.catalog.rules.filter(r => r.engine === "yara").length} YARA).
+              {" "}{pack.catalog.quarantined_count} noisy or unverified source rules were quarantined.
+              No rules are automatically installed and none authorize containment.
+              Review HOME_NET, scope, false positives and sensor-side alert policy before deployment.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => void downloadRules("suricata")}>Download Suricata rules</Button>
+              <Button variant="outline" onClick={() => void downloadRules("yara")}>Download YARA rules</Button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead><tr className="border-b text-muted-foreground">
+                  <th className="py-2">Engine</th><th>Rule</th><th>Risk</th><th>Review caveat</th>
+                </tr></thead>
+                <tbody>
+                  {pack.catalog.rules.map(rule => (
+                    <tr key={`${rule.engine}:${rule.id}`} className="border-b align-top">
+                      <td className="py-2">{rule.engine}</td>
+                      <td className="py-2"><strong>{rule.name}</strong><div className="text-muted-foreground text-xs">{rule.id}</div></td>
+                      <td className="py-2">{rule.false_positive_risk} false-positive risk</td>
+                      <td className="py-2 max-w-md text-xs">{rule.limitations}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
       <Card>
         <CardHeader><CardTitle>Recent detections</CardTitle></CardHeader>
