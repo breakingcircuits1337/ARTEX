@@ -59,6 +59,14 @@ func (NFTRunner) Check(ctx context.Context) error {
 		!strings.Contains(string(out), "timeout") {
 		return errors.New("dedicated set lacks IPv4 timeout support")
 	}
+	rules, err := nftCall(ctx, "list", "table", "inet", "artex_emergency")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(string(rules), "@blocked_v4") ||
+		!strings.Contains(string(rules), "drop") {
+		return errors.New("no enabled firewall drop rule references the exclusive timeout set")
+	}
 	return nil
 }
 
