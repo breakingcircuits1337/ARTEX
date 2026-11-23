@@ -87,6 +87,8 @@ func Rules(engine string) ([]byte, error) {
 		return assets.ReadFile(SuricataRulesPath)
 	case "yara":
 		return assets.ReadFile(YARARulesPath)
+	case "sigma":
+		return SigmaArtifact()
 	default:
 		return nil, errors.New("unknown detection engine")
 	}
@@ -170,5 +172,5 @@ func Validate() error {
 	if counted != m.RuleCount || len(selected) != 0 {
 		return fmt.Errorf("source/manifest mismatch: %d counted, %d unmatched", counted, len(selected))
 	}
-	return nil
+	return ValidateSigma()
 }

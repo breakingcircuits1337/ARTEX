@@ -156,7 +156,11 @@ func compileSigma(raw []byte) ([]compiledSigma,error) {
         if len(node.Content)==0 {return nil,errors.New("empty Sigma YAML document")}
         if err:=rejectYAMLFeatures(&node);err!=nil{return nil,err}
         var d sigmaDocument
-        if err:=node.Decode(&d);err!=nil{return nil,fmt.Errorf("unsupported Sigma schema: %w",err)}
+        strictRaw,err:=yaml.Marshal(&node)
+        if err!=nil{return nil,fmt.Errorf("invalid Sigma document: %w",err)}
+        strictDecoder:=yaml.NewDecoder(bytes.NewReader(strictRaw))
+        strictDecoder.KnownFields(true)
+        if err:=strictDecoder.Decode(&d);err!=nil{return nil,fmt.Errorf("unsupported Sigma schema: %w",err)}
         if len(out)>=maxSigmaRules {return nil,errors.New("too many Sigma rules")}
         if !sigmaRuleID.MatchString(d.ID) || seen[d.ID] {return nil,fmt.Errorf("invalid or duplicate Sigma ID %q",d.ID)}
         seen[d.ID]=true

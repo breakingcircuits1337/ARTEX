@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+    "crypto/sha256"
 	"io"
 	"net/http"
 	"strconv"
+    "strings"
 	"time"
 
 	"github.com/Autumn-27/artex/defense"
@@ -187,7 +189,11 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		} else if companyID.Valid {
 			correlationKey = fmt.Sprintf("company:%d:%s", companyID.Int64, correlationKey)
 		}
-		for _, hit := range defense.EvaluateEvent(e) {
+		hits, err := defense.EvaluateEventWithSigma(e)
+        if err!=nil {writeErr(w,503,"reviewed detection pack unavailable");return}
+        matchedSigma := false
+		for _, hit := range hits {
+            if strings.HasPrefix(hit.RuleID,"sigma_"){matchedSigma=true}
 			created, err := insertDefenseAlert(ctx, tx, id, correlationKey, e.ObservedAt, hit, assetJSON)
 			if err != nil {
 				writeErr(w, 503, "alert persistence failed")
@@ -239,7 +245,7 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 		// remains isolated until an independently reviewed collector policy exists.
 		var actionID int64
 		var autoErr error
-		if collector == nil && companyID.Valid {
+		if collector == nil && companyID.Valid && !matchedSigma {
 			actionID, autoErr = s.stageEmergencyAction(ctx, tx, e, id, time.Now())
 		}
 		if autoErr != nil {
