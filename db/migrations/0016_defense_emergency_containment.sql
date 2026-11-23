@@ -3,6 +3,7 @@
 CREATE TABLE IF NOT EXISTS defense_emergency_control (
     id SMALLINT PRIMARY KEY CHECK (id = 1),
     paused BOOLEAN NOT NULL DEFAULT TRUE,
+    policy_hash TEXT NOT NULL DEFAULT '',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     operator_reason TEXT NOT NULL DEFAULT 'Initially paused'
 );
