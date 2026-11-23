@@ -4,61 +4,43 @@
 
 # ARTEX
 
-**Autonomous penetration testing that keeps its receipts.**
+**Evidence-first security testing and defense operations — autonomous where safe, human-controlled where it matters.**
 
-(upstream: [Autumn-27/ARTEX](https://github.com/Autumn-27), AGPL-3.0)
+A self-hosted Go + PostgreSQL security platform with an embedded Next.js console.
 
-Self-hosted multi-agent offensive security. A planner explores, workers run real tools,
-and every finding stays bound to the assets and HTTP traffic that prove it.
+[![CI](https://github.com/breakingcircuits1337/ARTEX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/breakingcircuits1337/ARTEX?color=6b34db)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX?color=6b34db)](go.mod)
+[![Upstream releases](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=upstream%20release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
 
-[![Release](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
-[![License](https://img.shields.io/github/license/BaaRai/ARTEX?color=6b34db)](LICENSE)
-[![CI](https://github.com/BaaRai/ARTEX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BaaRai/ARTEX/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/github/go-mod/go-version/BaaRai/ARTEX?color=6b34db)](go.mod)
-
-[Quick start](#quick-start) · [Screenshots](#screenshots) · [How it works](#how-it-works) · [Install](#installation) · [Configuration](#configuration) · [Security](SECURITY.md)
+[Quick start](#quick-start) · [Defense capabilities](#art-ex-defense-capabilities) · [Defensive setup](#defense-quick-start) · [Response safety](#defensive-response-safety) · [Architecture](#architecture) · [Installation](#installation) · [Security](SECURITY.md)
 
 </div>
 
 ---
 
-ARTEX is a self-hosted, LLM-driven penetration testing platform. It is not a chat wrapper around
-a scanner: a planner splits a goal into intents, workers execute them with real tools, and the
-results are written back into **two linked graphs**: one for what you know about the target, one
-for how the test is progressing. Every finding can carry the captured request and response that
-justify it, and every autonomous action passes through scope rules, approval gates and budgets.
+ARTEX supports **two distinct operating modes**. The original autonomous penetration-testing engine remains available for explicitly authorized assessments; the Breaking Circuits fork also adds a defense-oriented SOC, evidence correlation, deterministic investigations, and bounded emergency containment.
 
-- **It explores, it doesn't chat.** Goal decomposition, intent dispatch, worker execution and
-  write-back form a closed loop that keeps advancing until the goal is proven.
-- **Two graphs, one audit trail.** The shared asset graph says *what exists*; the per-task
-  exploration graph says *what was tried, what it produced, and why*. Anchors link the two.
-- **Findings with evidence.** A recording MITM proxy and a browser extension capture real traffic;
-  findings, evidence quotes and retests are tied to the exact request/response.
-- **Autonomy with brakes.** Human-in-the-loop approvals, argv-prefix rules, scope/deny gates,
-  token and turn budgets, a target noise governor, and prompt-injection framing on tool output.
-- **Self-hosted and model-agnostic.** One Go binary with the Next.js UI embedded, PostgreSQL,
-  your own Anthropic/OpenAI-compatible endpoint, or a local Ollama.
+| Mode | Set `ARTEX_MODE` | Purpose | Important boundary |
+| --- | --- | --- | --- |
+| **Defense** | `defense` | Passive exposure review, normalized event ingestion, case investigation, detection, SOC monitoring, and controlled response | Restrictive agent-tool policy; emergency actions require separately configured and armed controls |
+| **Penetration testing** | `pentest` (default) | Goal-driven planner/worker exploration, traffic evidence, asset and exploration graphs, retesting | Active testing **only on systems you own or are authorized to assess** |
 
-**ARTEX Defense (opt-in preview):** set `ARTEX_MODE=defense` to enable
-Phase 1 passive exposure triage and Phase 2 authenticated security telemetry,
-deterministic alert signals, asset links, and the read-only SOC page.
-See [Phase 1](docs/DEFENSE_PHASE1.md), [Phase 2](docs/DEFENSE_PHASE2.md), and [Phase 3: incident response review](docs/DEFENSE_PHASE3.md) and [Emergency Auto-Containment](docs/DEFENSE_EMERGENCY.md).
-Phase 5 supplies a curated [alert-only detection pack](docs/DEFENSE_DETECTION_PACK.md) for operator-managed Suricata/YARA sensors; no rules are deployed automatically.
-Phase 6 adds an [evidence-linked threat correlation graph, ATT&CK hypotheses, and incident timelines](docs/DEFENSE_PHASE6.md) to existing defensive cases; graph relationships never authorize automatic containment.
-Phase 7 adds [autonomous evidence-only case investigation and human review](docs/DEFENSE_PHASE7.md), with opt-in high/critical case intake, durable worker queues, pause/cancel controls and immutable reviewer verdicts.
-Phase 8 adds [near-real-time SOC monitoring](docs/DEFENSE_PHASE8.md): authenticated streaming watermarks, sensor-ingestion health, prioritized human review, and polling fallback—without modifying autonomous containment.
-This mode is a defensive prototype; it does not guarantee network isolation or
-production-safe autonomous incident response.
+The defense engine is **not simply the offensive agent with a different prompt**: Phase 1 enforces a fail-closed, code-level defensive tool allowlist. Later defense phases use separate bounded database analyses. The Phase 7 investigator is *deterministic*, not a free-running LLM with shell or scanning privileges.
+
+**Project lineage and license:** Original work by [Autumn-27](https://github.com/Autumn-27), subsequently continued in [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX); this [Breaking Circuits fork](https://github.com/breakingcircuits1337/ARTEX) adds the opt-in defensive platform. Licensed under [AGPL-3.0](LICENSE). Preserve upstream credits when redistributing.
 
 ---
-
 ## Quick start
 
+Clone **this repository** and build the image from your checkout so the defensive features are included:
+
 ```bash
-git clone https://github.com/BaaRai/ARTEX.git
+git clone https://github.com/breakingcircuits1337/ARTEX.git
 cd ARTEX
-cp .env.example .env            # set POSTGRES_PASSWORD (and optionally an LLM key)
-docker compose up -d --build    # builds from this checkout, starts PostgreSQL
+cp .env.example .env              # set a strong POSTGRES_PASSWORD
+# In .env, set ARTEX_MODE=defense for the SOC, or leave pentest for testing
+docker compose up -d --build      # self-hosted Go backend, web UI and PostgreSQL
 ```
 
 Open **http://localhost:8787**. On the first visit `/setup` asks for the one-time setup token
@@ -68,13 +50,84 @@ printed at startup:
 docker compose logs artex | grep "Setup token"
 ```
 
-> Multi-arch release images (`linux/amd64`, `linux/arm64`) are published to GitHub Container
-> Registry at `ghcr.io/baarai/artex` from the next tagged release; v0.7.0 predates the publish
-> step. For pulling the prebuilt image and all other installation paths (script, binaries,
-> source, release archives), see [Installation](#installation).
+> **Fork build vs. upstream image:** The `ghcr.io/baarai/artex` image and BaaRai release links later in this README refer to the **upstream project**, not to a verified build of this Breaking Circuits fork. To run the defense phases, **build from this repository** as shown above; do not assume an upstream image includes the SOC or containment changes. For other installation methods see [Installation](#installation).
 
 ---
 
+## ARTEX Defense capabilities
+
+Defense mode is an **opt-in, evidence-first security operations system**. Each capability below is implemented in this repository; actual production suitability depends on your sensor trust, configuration, infrastructure, and testing.
+
+| Stage | Capability | Operator-facing result | Source |
+| --- | --- | --- | --- |
+| **Phase 1** | Restricted, metadata-only exposure analysis against already-recorded assets | Review candidates for risky ports and recorded HTTP endpoints; **no active network probing** | [Defense Phase 1](docs/DEFENSE_PHASE1.md) |
+| **Phase 2** | Authenticated Suricata, Wazuh, generic and OCSF-style normalized telemetry; deterministic detection and asset linking | Event and alert ledger with source identifiers; source data is not independently attested | [Defense Phase 2](docs/DEFENSE_PHASE2.md) |
+| **Phase 3** | Incident cases, human triage, fixed response recommendations and append-only audit | Review decisions and simulated response workflows; no automatic execution of recommended playbooks | [Incident response review](docs/DEFENSE_PHASE3.md) |
+| **Emergency response** | Explicitly armed, policy-scoped, deterministic containment fast path | Time-limited exact-public-IPv4 nftables blocks or simulation, individual revert, and global **PANIC STOP** | [Emergency Auto-Containment](docs/DEFENSE_EMERGENCY.md) |
+| **Phase 5** | Curated **alert-only** Suricata/YARA detection pack | Manual rule-file export; quarantined noisy/unverified rules and no auto-installation | [Detection Pack](docs/DEFENSE_DETECTION_PACK.md) |
+| **Phase 6** | Case-scoped observed indicators, evidence-backed relationships, provenance, confidence, and ATT&CK hypotheses | Threat correlation graph and chronological incident timeline; links are **not proof of attribution** | [Threat Correlation Graph](docs/DEFENSE_PHASE6.md) |
+| **Phase 7** | Durable autonomous *deterministic* investigation, evidence gaps, bounded retry, and human-verdict workflow | Unverified findings tied to source events; cancel/pause; opt-in high/critical case intake | [Autonomous Defensive Investigation](docs/DEFENSE_PHASE7.md) |
+| **Phase 8** | Near-real-time SOC revisions, sensor freshness, alert rates, and priority review queue | Authenticated SSE with polling fallback; operator-created cases and ingestion-health panels | [Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+
+### Defense architecture
+
+```mermaid
+flowchart LR
+  S["Authorized sensors / trusted collectors"] --> E["Authenticated event ingestion"]
+  E --> DB[("Normalized events + asset links")]
+  DB --> D["Deterministic detection"]
+  D --> C["Case + evidence correlation graph"]
+  C --> I["Bounded autonomous investigation"]
+  I --> H["Human review / audited verdicts"]
+  DB --> SOC["Live SOC dashboard + sensor health"]
+  C --> SOC
+  H --> SOC
+  DB -. "separate fixed admission rules" .-> P["Operator-armed emergency policy"]
+  P --> F["Short-lived, reversible public IPv4 block / simulation"]
+  F --> RB["Operator revert / panic stop + expiry"]
+```
+
+The SOC live stream carries **only revision counters**, not raw events, passwords, source addresses or security findings. The browser then fetches event details through existing authenticated APIs. Under healthy, unbuffered conditions the stream checks shared PostgreSQL roughly every **two seconds**, with reconnection and polling fallback; this is **not** a two-second end-to-end detection or response guarantee.
+
+### Defense quick start
+
+1. In `.env`, set `ARTEX_MODE=defense`, configure PostgreSQL credentials, and leave `ARTEX_AUTO_CONTAIN_MODE=off` for your first deployment.
+2. Build from this fork with `docker compose up -d --build`. Log in at **http://localhost:8787** using the setup token shown by `docker compose logs artex`.
+3. Open **Functions → Defense SOC** (`/function/defense`) to view monitoring, event ingestion, alert priority, and detection-pack exports. Connect only authorized sensors over a trusted/private network.
+4. Use **Cases & Approvals** to open and review incidents; in an individual case, open **Threat intelligence & timeline** for the evidence graph, Phase 7 investigation runs, and immutable human verdicts.
+5. Keep high/critical **automatic case intake disabled** until an operator authorizes it. It is evidence-only and capped at **30 cases per rolling hour**.
+6. Run **Emergency Auto-Containment in simulation first**. Real nftables enforcement requires a separately provisioned host-local helper, reviewed protected networks/signature allowlists, and an explicit operator **ARM** action. Review its [rollout and reversal checklist](docs/DEFENSE_EMERGENCY.md) before considering any live deployment.
+
+**Deployment note:** The passive SOC accepts authenticated JSON event batches, not anonymous public telemetry. Its current ingest API uses console session authentication rather than dedicated least-privileged collector credentials. Protect that token and the network boundary; do not expose an admin token in an Internet-facing forwarder.
+
+### Defensive response safety
+
+- **Human in the loop:** Case triage and response recommendations remain subject to operator decisions; investigator findings are unverified hypotheses, not attack attribution or response authorizations.
+- **Autonomous only within a narrow policy:** Emergency enforcement is separately configured and initially **paused**. It uses deterministic corroboration, protected destination scope, source exemptions, rate/active limits, short expiry and an explicit dashboard ARM control. The live action supported here is a public-IPv4 source block in an operator-provisioned nftables set; no autonomous account disabling, host isolation, file deletion or OT-controller changes are implemented.
+- **Reversal is bounded, not a full undo:** The dashboard can remove active blocks and pause future admissions, and kernel entries expire. Previously dropped packets, disconnected sessions, interrupted processes or lost work **cannot** be restored by clicking Revert.
+- **No implicit trust from a graph:** A common IP, sensor severity, ATT&CK label, confidence heuristic or investigation verdict does not confirm compromise and never directly enables auto-containment.
+- **Not production-certified:** No guaranteed latency SLA, independent sensor attestation, full OCSF/Sigma compliance, comprehensive OT safety certification or complete high-volume SIEM capability is claimed. Validate on synthetic data in an isolated lab and measure end-to-end p50/p95/p99 before relying on time-sensitive controls.
+
+### Operator documentation
+
+| Task | Guide |
+| --- | --- |
+| Initialize restricted defense mode | [Phase 1: Exposure review](docs/DEFENSE_PHASE1.md) |
+| Forward normalized security events and understand authentication | [Phase 2: Telemetry](docs/DEFENSE_PHASE2.md) |
+| Review incidents and fixed response playbooks | [Phase 3: Human response review](docs/DEFENSE_PHASE3.md) |
+| Configure simulated/live containment, expiry, scope, and one-click reversal | [Emergency Auto-Containment](docs/DEFENSE_EMERGENCY.md) |
+| Export and evaluate curated IDS/YARA rules | [Detection Pack](docs/DEFENSE_DETECTION_PACK.md) |
+| Inspect indicators, evidence provenance, ATT&CK hypotheses and timelines | [Phase 6: Correlation Graph](docs/DEFENSE_PHASE6.md) |
+| Control automated case analysis, pause, cancel, and review findings | [Phase 7: Investigation](docs/DEFENSE_PHASE7.md) |
+| Diagnose stream reconnects, collector freshness and alert priority | [Phase 8: Real-Time SOC](docs/DEFENSE_PHASE8.md) |
+
+---
+
+## Original penetration-testing engine
+
+The original ARTEX LLM-driven planner, workers, dual graph, recorded proxy, tests, findings, and tooling remain documented below for **authorized penetration testing**. The following worker, screenshot and installation sections describe that original engine and should not be confused with the restricted defense-mode investigation worker.
+
+---
 ## Multi-provider workers
 
 In **System → LLM**, configure the profiles you want to use. In **System → Settings**,
@@ -322,13 +375,15 @@ worker remains confined to the intent it claimed.
 
 ## Installation
 
+> **Breaking Circuits fork:** For Phase 1–8 defensive functionality, install from this repository's source checkout. Instructions below for prebuilt `ghcr.io/baarai/artex` images and BaaRai releases are **upstream artifacts** and must not be assumed to include these defensive features.
+
 > Requires **PostgreSQL**; exploration requires an **LLM** (`ANTHROPIC_API_KEY` or
 > `OPENAI_API_KEY`, also configurable in the UI).
 
 ### Option 1: one-click install script (recommended)
 
 ```bash
-git clone https://github.com/BaaRai/ARTEX.git
+git clone https://github.com/breakingcircuits1337/ARTEX.git
 cd ARTEX
 ./install.sh
 ```
@@ -349,7 +404,7 @@ first-run claim), or keep loopback and use a reverse proxy or SSH tunnel.
 Build from a checkout with Docker Compose:
 
 ```bash
-git clone https://github.com/BaaRai/ARTEX.git
+git clone https://github.com/breakingcircuits1337/ARTEX.git
 cd ARTEX
 cp .env.example .env            # set POSTGRES_PASSWORD, optionally ANTHROPIC_API_KEY
 docker compose up -d --build
@@ -868,6 +923,8 @@ CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 
 ## Architecture
 
+The architecture below describes the **original penetration-testing mode**. For the opt-in defense pipeline and its independent emergency fast path, see [Defense architecture](#defense-architecture) above.
+
 ARTEX is an **LLM multi-agent-driven autonomous penetration testing system**: a Go monolithic
 backend (with the Next.js UI embedded) + PostgreSQL. Agent capabilities come from the
 [`norma`](https://github.com/Autumn-27/norma) SDK (`agentcore` / `tool` / `permission` / `harness` /
@@ -959,7 +1016,7 @@ Operational security properties:
 
 ## About this fork
 
-This repository is the English translation and continuation of ARTEX, originally by [Autumn-27](https://github.com/Autumn-27). The upstream repository is no longer public, so the link points to the author profile. Changes in this fork are tracked in [CHANGELOG.md](CHANGELOG.md), under the same AGPL-3.0 license.
+This [Breaking Circuits ARTEX repository](https://github.com/breakingcircuits1337/ARTEX) builds on ARTEX originally created by [Autumn-27](https://github.com/Autumn-27), with its English-language continuation maintained at [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX). This fork retains the original penetration-testing capabilities and adds an opt-in defensive tool guard, authenticated telemetry, investigation graphs, real-time SOC, and narrowly scoped emergency auto-containment. The historical work and contributing authors remain acknowledged, and the fork is distributed under the same [AGPL-3.0](LICENSE).
 
 ---
 
@@ -985,10 +1042,7 @@ available to those users**.
 > **Important**: the open source license does not restrict how the software is used. The usage
 > restrictions and disclaimer below are additional terms from the maintainers.
 
-**ARTEX is an offensive-security tool. Use it only against systems you own, or that you are
-explicitly authorized to test (your own lab, your organization's assets, or a bug bounty /
-vulnerability disclosure program's targets within its published scope and rules of engagement).
-Any use without authorization violates these terms.**
+**ARTEX includes offensive-security testing capabilities and an opt-in defensive security mode. Use active testing only against systems you own or are explicitly authorized to test (your own lab, your organization's assets, or targets within a program's published scope and rules of engagement). Deploy defensive telemetry, automation and containment only with the network owner's permission and appropriate operational change controls.**
 
 ### Permitted use
 
