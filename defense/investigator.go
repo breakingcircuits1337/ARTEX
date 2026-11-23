@@ -9,10 +9,10 @@ import (
 )
 
 type InvestigationObservation struct {
-	EventID          int64
-	Source           string
-	LinkReason       string
-	LinkConfidence   int
+	EventID        int64
+	Source         string
+	LinkReason     string
+	LinkConfidence int
 }
 type InvestigationTechnique struct {
 	EventID    int64
@@ -45,10 +45,10 @@ func AnalyzeInvestigation(s InvestigationSnapshot) []InvestigationFinding {
 		return nil
 	}
 	findings := []InvestigationFinding{{
-		Category: "alert_context",
-		Title: "Unverified sensor alert",
-		Explanation: "A stored security alert triggered this case. Its source record requires independent operator verification; signature strings and vendor severity are not proof of malicious activity.",
-		Confidence: 30,
+		Category:        "alert_context",
+		Title:           "Unverified sensor alert",
+		Explanation:     "A stored security alert triggered this case. Its source record requires independent operator verification; signature strings and vendor severity are not proof of malicious activity.",
+		Confidence:      30,
 		EvidenceEventID: s.AnchorEventID,
 	}}
 	distinct := map[int64]struct{}{}
@@ -65,19 +65,19 @@ func AnalyzeInvestigation(s InvestigationSnapshot) []InvestigationFinding {
 		// Phase 6 requires same sensor source plus two matching endpoint
 		// fields. These are related records, not independent verification.
 		findings = append(findings, InvestigationFinding{
-			Category: "corroboration",
-			Title: "Repeated same-source observations",
-			Explanation: fmt.Sprintf("%d normalized events were linked by Phase 6 source-and-endpoint matching. They may share one sensor or network path and do not independently confirm exploitation. Review original event IDs.", len(distinct)),
-			Confidence: min(strongest, 55),
+			Category:        "corroboration",
+			Title:           "Repeated same-source observations",
+			Explanation:     fmt.Sprintf("%d normalized events were linked by Phase 6 source-and-endpoint matching. They may share one sensor or network path and do not independently confirm exploitation. Review original event IDs.", len(distinct)),
+			Confidence:      min(strongest, 55),
 			EvidenceEventID: s.AnchorEventID,
 		})
 	}
 	if len(s.AssetIDs) > 0 {
 		findings = append(findings, InvestigationFinding{
-			Category: "asset_context",
-			Title: "Inventory associations require owner review",
-			Explanation: fmt.Sprintf("%d stored asset identifiers were attached to the source alert. Inventory matches are not evidence of exposure, reachability or successful compromise; verify ownership and safety constraints.", len(s.AssetIDs)),
-			Confidence: 30,
+			Category:        "asset_context",
+			Title:           "Inventory associations require owner review",
+			Explanation:     fmt.Sprintf("%d stored asset identifiers were attached to the source alert. Inventory matches are not evidence of exposure, reachability or successful compromise; verify ownership and safety constraints.", len(s.AssetIDs)),
+			Confidence:      30,
 			EvidenceEventID: s.AnchorEventID,
 		})
 	}
@@ -99,10 +99,10 @@ func AnalyzeInvestigation(s InvestigationSnapshot) []InvestigationFinding {
 		}
 		if hint != "" {
 			findings = append(findings, InvestigationFinding{
-				Category: "technique_hypothesis",
-				Title: "ATT&CK hypothesis requires corroboration",
-				Explanation: fmt.Sprintf("A stored, unconfirmed ATT&CK mapping (including %s) may guide follow-up. Validate the behavior against primary sensor evidence; the mapping does not establish technique execution or threat-actor identity.", hint),
-				Confidence: min(maxConfidence, 45),
+				Category:        "technique_hypothesis",
+				Title:           "ATT&CK hypothesis requires corroboration",
+				Explanation:     fmt.Sprintf("A stored, unconfirmed ATT&CK mapping (including %s) may guide follow-up. Validate the behavior against primary sensor evidence; the mapping does not establish technique execution or threat-actor identity.", hint),
+				Confidence:      min(maxConfidence, 45),
 				EvidenceEventID: evidenceID,
 			})
 		}
@@ -118,10 +118,10 @@ func AnalyzeInvestigation(s InvestigationSnapshot) []InvestigationFinding {
 	// independent sensor validation is always explicitly documented.
 	needs = append(needs, "independent sensor corroboration is not established")
 	findings = append(findings, InvestigationFinding{
-		Category: "coverage_gap",
-		Title: "Evidence gaps and alternative explanations",
-		Explanation: "Analyst follow-up recommended: " + strings.Join(needs, "; ") + ". Check benign administration, authorized testing, sensor spoofing and missing logs before concluding.",
-		Confidence: 0,
+		Category:        "coverage_gap",
+		Title:           "Evidence gaps and alternative explanations",
+		Explanation:     "Analyst follow-up recommended: " + strings.Join(needs, "; ") + ". Check benign administration, authorized testing, sensor spoofing and missing logs before concluding.",
+		Confidence:      0,
 		EvidenceEventID: s.AnchorEventID,
 	})
 	return findings

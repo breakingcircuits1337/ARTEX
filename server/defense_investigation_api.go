@@ -42,9 +42,9 @@ func (s *Server) investigationControl(w http.ResponseWriter, r *http.Request) {
 		"auto_intake": auto, "paused": paused,
 		"queued": pending, "running": running, "finished": finished,
 		"engine": "deterministic-v1", "actions_enabled": false,
-		"automatic_containment": false,
+		"automatic_containment":    false,
 		"auto_intake_max_per_hour": investigationAutoMaxHour,
-		"note": "Auto-intake is opt-in; it opens high/critical alert cases only. Pausing stops new analysis, not an already-running SQL transaction. It never arms containment.",
+		"note":                     "Auto-intake is opt-in; it opens high/critical alert cases only. Pausing stops new analysis, not an already-running SQL transaction. It never arms containment.",
 	})
 }
 
@@ -275,7 +275,7 @@ func (s *Server) listDefenseInvestigations(w http.ResponseWriter, r *http.Reques
 		runs = append(runs, map[string]any{
 			"id": runID, "trigger": trigger, "status": status, "attempts": attempts,
 			"summary": summary, "last_error": lastErr, "created_at": created,
-			"started_at": nullableInvestigationTime(started),
+			"started_at":   nullableInvestigationTime(started),
 			"completed_at": nullableInvestigationTime(completed),
 		})
 	}
