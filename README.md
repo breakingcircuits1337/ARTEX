@@ -72,6 +72,7 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 | **Phase 7** | Durable autonomous *deterministic* investigation, evidence gaps, bounded retry, and human-verdict workflow | Unverified findings tied to source events; cancel/pause; opt-in high/critical case intake | [Autonomous Defensive Investigation](docs/DEFENSE_PHASE7.md) |
 | **Phase 8** | Near-real-time SOC revisions, sensor freshness, alert rates, and priority review queue | Authenticated SSE with polling fallback; operator-created cases and ingestion-health panels | [Real-Time SOC](docs/DEFENSE_PHASE8.md) |
 | **PR #11** | Company-scoped evidence and cautious cross-sensor case correlation | Explicit collector company binding, bounded two-field evidence links, unscoped evidence anchor-only, SQL cross-company guards; **not multi-tenant RBAC** | [Company-scoped correlation](docs/DEFENSE_PHASE11.md) |
+| **PR #12** | Reviewed Sigma-compatible normalized-event rules, scoped password-guessing detector and curated ATT&CK hints | Four fixed, alert-only Sigma-subset rules; evidence-linked hypotheses, no full Sigma backend or containment authority | [Expanded detection coverage](docs/DEFENSE_PHASE12.md) |
 
 ### Defense architecture
 
@@ -125,6 +126,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 | Control automated case analysis, pause, cancel, and review findings | [Phase 7: Investigation](docs/DEFENSE_PHASE7.md) |
 | Diagnose stream reconnects, collector freshness and alert priority | [Phase 8: Real-Time SOC](docs/DEFENSE_PHASE8.md) |
 | Enroll company-scoped collectors and review independent sensor matches | [PR #11: Tenant-aware evidence](docs/DEFENSE_PHASE11.md) |
+| Review normalized Sigma-subset alerts and evidence-linked ATT&CK mappings | [PR #12: Detection expansion](docs/DEFENSE_PHASE12.md) |
 
 ---
 
