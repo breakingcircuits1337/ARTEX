@@ -11,10 +11,12 @@ func TestCatalogOnlyContainsAlertRules(t *testing.T) {
 		t.Fatalf("invalid detection pack: %v", err)
 	}
 	catalog, err := Catalog()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if catalog.Policy != "alert_only" || catalog.DefaultDeployed ||
 		catalog.ExecutionEnabled || catalog.AutonomousContainmentEnabled {
-		t.Fatal("catalog could enable active defensive actions")
+		t.Fatal("catalog could activate defensive actions")
 	}
 	if catalog.RuleCount != 10 || catalog.QuarantinedCount != 15 {
 		t.Fatalf("unexpected curated/quarantined counts: %+v", catalog)
@@ -47,5 +49,18 @@ func TestDownloadsAreFixedAlertOnlyAssets(t *testing.T) {
 	suricata, _ := Rules("suricata")
 	if !strings.Contains(string(suricata), "sid:9900001;") {
 		t.Fatal("expected source-derived signature missing")
+	}
+}
+
+func TestCatalogYARANameLookupIsStrict(t *testing.T) {
+	if rule, ok := LookupRule("yara", "ARTEX_JSP_Webshell_Numbered"); !ok ||
+		rule.AutoContainmentEligible || rule.Severity != "high" {
+		t.Fatalf("curated YARA lookup failed: %+v found=%v", rule, ok)
+	}
+	if _, ok := LookupRule("yara", "ARTEX_Config_File"); ok {
+		t.Fatal("quarantined YARA signature was accepted")
+	}
+	if _, ok := LookupRule("suricata", "ARTEX_JSP_Webshell_Numbered"); ok {
+		t.Fatal("detection engine names are not isolated")
 	}
 }
