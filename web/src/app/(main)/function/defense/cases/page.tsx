@@ -96,7 +96,8 @@ export default function ResponseReviewPage() {
     setCases(c.cases);
     setResponses(r.responses);
     setPlaybooks(p.playbooks);
-    setSelectedCase(current => current || String(c.cases.find(row => active(row.status))?.id ?? ""));
+    setSelectedCase(current => c.cases.some(row => active(row.status) && String(row.id) === current)
+      ? current : String(c.cases.find(row => active(row.status))?.id ?? ""));
   }, []);
 
   React.useEffect(() => {
