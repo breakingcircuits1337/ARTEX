@@ -2,6 +2,9 @@ package defense
 
 import (
 	"errors"
+	"crypto/sha256"
+	"encoding/hex"
+	"sort"
 	"fmt"
 	"net/netip"
 	"os"
@@ -158,6 +161,29 @@ func (cfg EmergencyConfig) EligibleIP(source, destination string) bool {
 		return false
 	}
 	return true
+}
+
+// Fingerprint binds the human arm action to one exact policy. Changing from
+// simulation to live (or widening CIDRs, removing exemptions, etc.) silently
+// disarms until a console operator explicitly approves the new configuration.
+func (cfg EmergencyConfig) Fingerprint() string {
+	parts := []string{
+		string(cfg.Mode), cfg.TTL.String(),
+		strconv.Itoa(cfg.MaxActive), strconv.Itoa(cfg.MaxPerHour),
+		cfg.Freshness.String(),
+	}
+	for _, value := range cfg.Protected {
+		parts = append(parts, "protected="+value.String())
+	}
+	for _, value := range cfg.Exempt {
+		parts = append(parts, "exempt="+value.String())
+	}
+	for _, value := range cfg.AllowedSignatures {
+		parts = append(parts, "sig="+value)
+	}
+	sort.Strings(parts[5:])
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return hex.EncodeToString(sum[:])
 }
 
 // Only explicitly operator-reviewed Suricata signatures may trigger live
