@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"mime/multipart"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -108,6 +110,14 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
+	// Root every destination open at the operator's data directory. A writable
+	// uploads/ directory swapped for a symlink cannot redirect writes outside it.
+	dataRoot, err := os.OpenRoot(s.m.dir)
+	if err != nil {
+		writeErr(w, 500, "failed to open upload storage")
+		return
+	}
+	defer dataRoot.Close()
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
 		writeErr(w, 400, "missing upload file (form field file)")
@@ -132,7 +142,12 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 500, "Save failed: "+err.Error())
 			return
 		}
-		if err := saveUpload(hdr, dest); err != nil {
+		rel, err := filepath.Rel(s.m.dir, dest)
+		if err != nil || !filepath.IsLocal(rel) {
+			writeErr(w, 400, "invalid upload destination")
+			return
+		}
+		if err := saveChatUploadConfined(hdr, dataRoot, rel); err != nil {
 			writeErr(w, 500, "Save failed: "+err.Error())
 			return
 		}
@@ -140,6 +155,27 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		out = append(out, chatAttachment{Name: base, Path: "uploads/" + base, Size: hdr.Size, Abs: dest})
 	}
 	writeJSON(w, 200, map[string]any{"attachments": out})
+}
+
+// saveChatUploadConfined uses an exclusive descriptor-relative open. os.Root
+// refuses symlinks that escape the data directory, including parent swaps
+// between the name availability check and the actual file creation.
+func saveChatUploadConfined(hdr *multipart.FileHeader, root *os.Root, relative string) error {
+	if !filepath.IsLocal(relative) {
+		return fmt.Errorf("upload destination is outside data root")
+	}
+	input, err := hdr.Open()
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	output, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	_, err = io.Copy(output, input)
+	return err
 }
 
 // uniqueUploadPath returns dir/name, or dir/name-1, dir/name-2… when it already exists,

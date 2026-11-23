@@ -109,3 +109,46 @@ func TestChatUpload512MiBBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestConfinedChatUploadRejectsSymlinkedDirectory(t *testing.T) {
+	dataDir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataDir, "tasks", "7", "main"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dataDir, "tasks", "7", "main", "uploads")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	root, err := os.OpenRoot(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	rel := filepath.Join("tasks", "7", "main", "uploads", "outside.txt")
+	if f, err := root.OpenFile(rel, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644); err == nil {
+		f.Close()
+		t.Fatal("rooted chat upload escaped via symlinked uploads directory")
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "outside.txt")); !os.IsNotExist(err) {
+		t.Fatalf("external file was created: %v", err)
+	}
+	// An ordinary upload still works, but an existing name cannot be truncated.
+	if err := os.Remove(filepath.Join(dataDir, "tasks", "7", "main", "uploads")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dataDir, "tasks", "7", "main", "uploads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := root.OpenFile(rel, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if f, err := root.OpenFile(rel, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644); err == nil {
+		f.Close()
+		t.Fatal("exclusive create overwrote existing chat attachment")
+	}
+}
