@@ -91,7 +91,7 @@ type Server struct {
 	readyPG         readyCache
 	defenseOpsCache defenseOpsCache
 	defenseIngest   defenseIngestRuntime
-    defenseAICall func(context.Context,string)(string,error) // test seam; production uses configured no-tool LLM
+	defenseAICall   func(context.Context, string) (string, error) // test seam; production uses configured no-tool LLM
 
 	cfgMu     sync.Mutex
 	chatAgent *agent.ChatAgent // conversational runner for the chat page; nil w/o LLM
@@ -818,10 +818,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/defense/investigations/control", s.investigationControl)
 	mux.HandleFunc("POST /api/defense/investigations/control", s.setInvestigationControl)
 	mux.HandleFunc("GET /api/defense/cases/{id}/investigations", s.listDefenseInvestigations)
-    // PR #14: opt-in no-tool AI advisory, outside deterministic investigation.
-    mux.HandleFunc("GET /api/defense/cases/{id}/ai-reviews", s.listDefenseAIReviews)
-    mux.HandleFunc("POST /api/defense/cases/{id}/ai-reviews", s.requestDefenseAIReview)
-    mux.HandleFunc("POST /api/defense/ai-reviews/{id}/decision", s.decideDefenseAIReview)
+	// PR #14: opt-in no-tool AI advisory, outside deterministic investigation.
+	mux.HandleFunc("GET /api/defense/cases/{id}/ai-reviews", s.listDefenseAIReviews)
+	mux.HandleFunc("POST /api/defense/cases/{id}/ai-reviews", s.requestDefenseAIReview)
+	mux.HandleFunc("POST /api/defense/ai-reviews/{id}/decision", s.decideDefenseAIReview)
 	mux.HandleFunc("POST /api/defense/cases/{id}/investigations", s.queueDefenseInvestigation)
 	mux.HandleFunc("POST /api/defense/investigations/{id}/cancel", s.cancelDefenseInvestigation)
 	mux.HandleFunc("POST /api/defense/investigations/findings/{id}/review", s.reviewDefenseFinding)
