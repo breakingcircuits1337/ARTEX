@@ -40,7 +40,10 @@ All automatic responses require **both**:
 - A fresh observed event (no older than 30 seconds), a parsed, public IPv4
   **source**, and an explicit IPv4 **destination within the operator's protected
   CIDR allowlist**. Private, reserved, internal and operator-exempt source
-  ranges are never blocked.
+  ranges are never blocked. In live nftables mode, **private destination
+  networks are also excluded by default**. They require a separate
+  `ARTEX_AUTO_CONTAIN_ALLOW_PRIVATE_DESTS=true` opt-in and independent
+  site-safety/change-control approval; this does not make OT blocking safe.
 - The operator must set a non-off mode **and click ARM** in the SOC dashboard.
   ARM is persisted; PAUSE stops new admissions. The first startup is paused. ARM is cryptographically
 bound to the exact mode, protected/exempt networks, allowed Suricata signatures,
@@ -85,6 +88,7 @@ ARTEX_AUTO_CONTAIN_PROTECTED_CIDRS=192.0.2.0/24
 ARTEX_AUTO_CONTAIN_EXEMPT_CIDRS=
 # Only the exact reviewed signature below can activate the IDS rule.
 ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES=Critical sensor signature
+ARTEX_AUTO_CONTAIN_ALLOW_PRIVATE_DESTS=false
 ARTEX_AUTO_CONTAIN_TTL_SECONDS=120
 ARTEX_AUTO_CONTAIN_MAX_ACTIVE=20
 ARTEX_AUTO_CONTAIN_MAX_PER_HOUR=50
