@@ -10,6 +10,8 @@ import (
  "net"
  "strings"
  "time"
+
+ "github.com/Autumn-27/artex/detectionpack"
 )
 
 // SecurityEvent is a bounded, vendor-neutral projection. Raw event payloads,
@@ -163,6 +165,20 @@ func NormalizeEvent(source string, raw json.RawMessage, now time.Time) (Security
 // RuleHit is a deterministic signal, not a verified security incident.
 type RuleHit struct {RuleID,Title,Severity,Summary string}
 func EvaluateEvent(e SecurityEvent) []RuleHit {
+ // An authorized YARA scanner may submit a generic endpoint observation
+ // naming a curated signature. Neither the report nor the rule name
+ // grants permission for live scanning or automated containment.
+ if e.Source=="generic" && e.Kind=="endpoint" && e.Signature!="" {
+  if rule,ok:=detectionpack.LookupRule("yara",e.Signature); ok {
+   return []RuleHit{{
+    RuleID:"curated_yara_"+rule.ID,
+    Title:"Reported YARA rule match (unverified)",
+    Severity:rule.Severity,
+    Summary:"Operator-submitted scanner observation for "+rule.ID+
+     ". Correlate original scan evidence and check benign context before escalation.",
+   }}
+  }
+ }
  if !e.VendorAlert || e.Signature=="" {return nil}
  severity:="medium";if e.Severity>=8 {severity="high"}
  return []RuleHit{{RuleID:"vendor_alert_v1",Title:"Upstream security alert",Severity:severity,Summary:"Alert from "+e.Source+": "+e.Signature}}
