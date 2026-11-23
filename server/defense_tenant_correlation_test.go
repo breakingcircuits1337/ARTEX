@@ -273,3 +273,94 @@ func TestDecodeDefenseCompanyScopeValidation(t *testing.T) {
 		t.Fatalf("scoped batch scope=%d events=%s err=%v", scope, b, err)
 	}
 }
+
+func TestUnscopedLegacyEvidenceAnchorOnlyPG(t *testing.T) {
+	m := tenantTestManager(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tx, err := m.pg.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	key := fmt.Sprintf("legacy-anchor-%d", time.Now().UnixNano())
+	var anchor int64
+	for i := 0; i < 2; i++ {
+		var id int64
+		err := tx.QueryRowContext(ctx, `INSERT INTO defense_events
+			(source,external_id,observed_at,kind,src_ip,dst_ip,severity)
+			VALUES('suricata',$1,now(),'network','203.0.113.45','192.0.2.45',5)
+			RETURNING id`, fmt.Sprintf("%s-%d", key, i)).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			anchor = id
+		}
+	}
+	var alertID, caseID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO defense_alerts
+		(rule_id,title,severity,summary,event_id,correlation_key,window_start)
+		VALUES('legacy','Legacy anchor','low','Unscoped test',$1,$2,now())
+		RETURNING id`, anchor, key).Scan(&alertID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.QueryRowContext(ctx, `INSERT INTO defense_cases(alert_id)
+		VALUES($1) RETURNING id`, alertID).Scan(&caseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := correlateDefenseCase(ctx, tx, caseID, "correlator")
+	if err != nil || count.Observations != 1 {
+		t.Fatalf("unscoped legacy peer linked: %+v err=%v", count, err)
+	}
+}
+
+func TestTenantDatabaseImmutabilityPG(t *testing.T) {
+	m := tenantTestManager(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tx, err := m.pg.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	a, b := tenantCompanies(t, ctx, tx, "immutability")
+	key := fmt.Sprintf("tenant-immutable-%d", time.Now().UnixNano())
+	var collectorID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO defense_collectors
+		(name,source,token_hash,company_id)
+		VALUES($1,'suricata',$2,$3) RETURNING id`,
+		key, strings.Repeat("a", 64), a).Scan(&collectorID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var eventID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO defense_events
+		(source,external_id,observed_at,kind,severity,collector_id,company_id)
+		VALUES('suricata',$1,now(),'other',0,$2,$3) RETURNING id`,
+		key, collectorID, a).Scan(&eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		sql  string
+		arg  int64
+		part string
+	}{
+		{`UPDATE defense_collectors SET company_id=$1 WHERE id=$2`, collectorID, "collector company binding is immutable"},
+		{`UPDATE defense_events SET company_id=$1 WHERE id=$2`, eventID, "event collector and company provenance are immutable"},
+	} {
+		if _, err := tx.ExecContext(ctx, `SAVEPOINT tenant_immutable`); err != nil {
+			t.Fatal(err)
+		}
+		_, err := tx.ExecContext(ctx, check.sql, b, check.arg)
+		if err == nil || !strings.Contains(err.Error(), check.part) {
+			t.Fatalf("immutable provenance update allowed: %s error=%v", check.sql, err)
+		}
+		if _, err := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT tenant_immutable`); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
