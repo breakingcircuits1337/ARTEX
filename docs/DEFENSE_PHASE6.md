@@ -126,7 +126,8 @@ JSON uses the existing 4 KiB bounded decoder with unknown fields rejected.
 ## Dashboard
 
 From **Functions → Defense → Cases & Approvals**, choose any case and
-**Threat intelligence & timeline**. The detail page shows:
+**Threat intelligence & timeline**. The detail page is the static-export
+compatible route `/function/defense/intelligence?case=<id>` and shows:
 
 1. Event-linked indicators with per-event provenance and first/last seen.
 2. Co-observation relationships with exact backing event IDs.
