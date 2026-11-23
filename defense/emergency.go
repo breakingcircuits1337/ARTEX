@@ -29,6 +29,7 @@ type EmergencyConfig struct {
 	MaxActive      int
 	MaxPerHour     int
 	Freshness      time.Duration
+	AllowedSignatures []string
 }
 
 var reservedSources = []string{
@@ -104,6 +105,20 @@ func LoadEmergencyConfig() (EmergencyConfig, error) {
 		return EmergencyConfig{}, err
 	}
 	cfg.Freshness = 30 * time.Second
+	sigs := strings.TrimSpace(os.Getenv("ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES"))
+	if sigs != "" {
+		parts := strings.Split(sigs, ",")
+		if len(parts) > 32 {
+			return EmergencyConfig{}, errors.New("emergency Suricata allowlist exceeds 32 signatures")
+		}
+		for _, part := range parts {
+			sig := strings.TrimSpace(part)
+			if len(sig) < 3 || len(sig) > 256 {
+				return EmergencyConfig{}, errors.New("emergency Suricata signature must be 3..256 bytes")
+			}
+			cfg.AllowedSignatures = append(cfg.AllowedSignatures, sig)
+		}
+	}
 	if cfg.Mode != EmergencyOff && len(cfg.Protected) == 0 {
 		return EmergencyConfig{}, errors.New("emergency containment needs explicit protected destination IPv4 CIDRs")
 	}
@@ -145,6 +160,17 @@ func (cfg EmergencyConfig) EligibleIP(source, destination string) bool {
 	return true
 }
 
+// Only explicitly operator-reviewed Suricata signatures may trigger live
+// containment. An unspecified allowlist means no automatic IDS response.
+func (cfg EmergencyConfig) TrustedSignature(signature string) bool {
+	for _, approved := range cfg.AllowedSignatures {
+		if signature == approved {
+			return true
+		}
+	}
+	return false
+}
+
 // EmergencyDecision is a preauthorized deterministic rule, not an LLM
 // recommendation. The caller supplies counts from stored, distinct telemetry.
 type EmergencyDecision struct {
@@ -164,7 +190,7 @@ func (cfg EmergencyConfig) Decide(event SecurityEvent, now time.Time, repeatedAl
 	}
 	if event.Source == "suricata" && event.Kind == "network" &&
 		event.Action == "alert" && event.VendorAlert &&
-		event.Severity >= 9 && event.Signature != "" && repeatedAlerts >= 3 {
+		event.Severity >= 9 && cfg.TrustedSignature(event.Signature) && repeatedAlerts >= 3 {
 		return EmergencyDecision{
 			Rule:   "repeated_critical_ids_v1",
 			Reason: "Three or more matching critical Suricata alerts for an authorized destination within ten seconds",
