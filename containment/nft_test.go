@@ -26,6 +26,7 @@ func TestNFTRunnerFixedCommandBoundary(t *testing.T) {
 printf '%s\n' "$*" >> "$FAKE_NFT_LOG"
 case "$1 $2" in
   "list set") printf 'table inet artex_emergency { set blocked_v4 { type ipv4_addr; flags timeout; }}\n'; exit 0 ;;
+  "list table") printf 'table inet artex_emergency { chain guarded_forward { ip saddr @blocked_v4 counter drop; }}\n'; exit 0 ;;
   "get element") test -f "$FAKE_NFT_STATE"; exit $? ;;
   "add element") /bin/touch "$FAKE_NFT_STATE"; exit $? ;;
   "delete element") /bin/rm -f "$FAKE_NFT_STATE"; exit $? ;;
