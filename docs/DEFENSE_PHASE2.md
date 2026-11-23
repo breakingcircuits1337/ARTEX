@@ -66,6 +66,29 @@ Forwarders should batch fewer than 50 records and send them using TLS or a
 private tunnel. Do not automatically forward complete raw logs, credentials,
 request/response bodies, or tokens.
 
+### Continuous log forwarding (included)
+
+A Python standard-library forwarder now reads Suricata EVE or Wazuh
+newline-delimited JSON and pushes batches to the authenticated API:
+
+```bash
+# Authenticated ARTEX session bearer from your own login, never hard-code in a script.
+export ARTEX_DEFENSE_JWT='<your-authenticated-session-token>'
+python3 scripts/defense_forwarder.py --source suricata --file /var/log/suricata/eve.json --follow --url https://your-private-soc.example
+# Wazuh on a separately authorized collector:
+python3 scripts/defense_forwarder.py --source wazuh --file /var/ossec/logs/alerts/alerts.json --follow --url https://your-private-soc.example
+```
+
+Remote HTTP destinations are rejected; local loopback HTTP is allowed.
+Redirects are disabled so authorization headers are not sent to a new origin.
+Partial batches flush after roughly five seconds when following a quiet file.
+The forwarder does not implement durable cursor checkpoints, log rotation
+reopening, queueing, backpressure or retry scheduling; a failed send causes
+a visible failure and needs operator supervision. Replaying the file on restart
+is safe with ingestion deduplication, but can be costly for large logs.
+Run `python3 -m unittest scripts/test_defense_forwarder.py` for offline checks.
+
+
 ## Detectors — deterministic version 1
 
 1. `vendor_alert_v1`: emits a signal when an incoming Suricata event has
