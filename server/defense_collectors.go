@@ -23,6 +23,7 @@ type collectorIdentity struct {
 	ID        int64
 	Source    string
 	TokenHash string
+	CompanyID sql.NullInt64
 }
 type collectorContextKey struct{}
 
@@ -94,9 +95,10 @@ func (s *Server) authenticateCollector(ctx context.Context, header string) (*col
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var source, hash string
+	var companyID sql.NullInt64
 	err := s.m.pg.QueryRowContext(ctx,
-		`SELECT source,token_hash FROM defense_collectors WHERE id=$1 AND revoked_at IS NULL`, id).
-		Scan(&source, &hash)
+		`SELECT source,token_hash,company_id FROM defense_collectors WHERE id=$1 AND revoked_at IS NULL`, id).
+		Scan(&source, &hash, &companyID)
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return nil, errCollectorStore
 	}
@@ -113,7 +115,7 @@ func (s *Server) authenticateCollector(ctx context.Context, header string) (*col
 	if subtle.ConstantTimeCompare([]byte(got), []byte(hash)) != 1 {
 		return nil, errCollectorCredential
 	}
-	return &collectorIdentity{ID: id, Source: source, TokenHash: got}, nil
+	return &collectorIdentity{ID: id, Source: source, TokenHash: got, CompanyID: companyID}, nil
 }
 
 // Hold a row SHARE lock throughout ingestion so a concurrent token rotation
@@ -122,16 +124,18 @@ func (s *Server) authenticateCollector(ctx context.Context, header string) (*col
 // afterwards are rejected by rechecking the digest under this lock.
 func validateCollectorTransaction(ctx context.Context, tx *sql.Tx, identity *collectorIdentity) (bool, error) {
 	var currentHash string
-	err := tx.QueryRowContext(ctx, `SELECT token_hash FROM defense_collectors
+	var companyID sql.NullInt64
+	err := tx.QueryRowContext(ctx, `SELECT token_hash,company_id FROM defense_collectors
 		WHERE id=$1 AND source=$2 AND revoked_at IS NULL FOR SHARE`,
-		identity.ID, identity.Source).Scan(&currentHash)
+		identity.ID, identity.Source).Scan(&currentHash, &companyID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	return subtle.ConstantTimeCompare([]byte(identity.TokenHash), []byte(currentHash)) == 1, nil
+	return subtle.ConstantTimeCompare([]byte(identity.TokenHash), []byte(currentHash)) == 1 &&
+		identity.CompanyID == companyID, nil
 }
 
 // Called within the event ingestion transaction. This shared SQL minute
@@ -163,6 +167,7 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name   string `json:"name"`
 		Source string `json:"source"`
+		CompanyID int64 `json:"company_id"`
 	}
 	if !decodeDefenseWorkflow(w, r, &input) {
 		return
@@ -177,8 +182,12 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "unsupported collector source")
 		return
 	}
+	if input.CompanyID <= 0 { writeErr(w,400,"company_id is required for new collector enrollment"); return }
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
+	var companyExists bool
+	if err := pg.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`, input.CompanyID).Scan(&companyExists); err != nil { writeErr(w,503,"company scope lookup unavailable"); return }
+	if !companyExists { writeErr(w,400,"company_id does not identify an existing company"); return }
 	tx, err := pg.BeginTx(ctx, nil)
 	if err != nil {
 		writeErr(w, 503, "collector store unavailable")
@@ -187,8 +196,8 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	var id int64
 	// Unique name conflicts are intentionally reported without leaking DB details.
-	if err := tx.QueryRowContext(ctx, `INSERT INTO defense_collectors(name,source,token_hash)
-        VALUES($1,$2,$3) ON CONFLICT(name) DO NOTHING RETURNING id`, input.Name, input.Source, strings.Repeat("0", 64)).Scan(&id); err != nil {
+	if err := tx.QueryRowContext(ctx, `INSERT INTO defense_collectors(name,source,token_hash,company_id)
+        VALUES($1,$2,$3,$4) ON CONFLICT(name) DO NOTHING RETURNING id`, input.Name, input.Source, strings.Repeat("0", 64), input.CompanyID).Scan(&id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErr(w, 409, "collector name already exists")
 			return
@@ -215,7 +224,7 @@ func (s *Server) collectorCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 201, map[string]any{"id": id, "name": input.Name, "source": input.Source, "token": token,
+	writeJSON(w, 201, map[string]any{"id": id, "name": input.Name, "source": input.Source, "company_id": input.CompanyID, "token": token,
 		"note": "Save this secret in a restricted credential store. It cannot be read again."})
 }
 func (s *Server) collectorList(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +237,7 @@ func (s *Server) collectorList(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 	defer cancel()
-	rows, err := pg.QueryContext(ctx, `SELECT id,name,source,created_at,rotated_at,revoked_at
+	rows, err := pg.QueryContext(ctx, `SELECT id,name,source,company_id,created_at,rotated_at,revoked_at
         FROM defense_collectors ORDER BY id DESC LIMIT 200`)
 	if err != nil {
 		writeErr(w, 503, "collector list unavailable")
@@ -239,6 +248,7 @@ func (s *Server) collectorList(w http.ResponseWriter, r *http.Request) {
 		ID      int64      `json:"id"`
 		Name    string     `json:"name"`
 		Source  string     `json:"source"`
+		CompanyID *int64 `json:"company_id"`
 		Created time.Time  `json:"created_at"`
 		Rotated *time.Time `json:"rotated_at"`
 		Revoked *time.Time `json:"revoked_at"`
@@ -246,7 +256,7 @@ func (s *Server) collectorList(w http.ResponseWriter, r *http.Request) {
 	out := make([]item, 0)
 	for rows.Next() {
 		var c item
-		if err := rows.Scan(&c.ID, &c.Name, &c.Source, &c.Created, &c.Rotated, &c.Revoked); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Source, &c.CompanyID, &c.Created, &c.Rotated, &c.Revoked); err != nil {
 			writeErr(w, 503, "collector list unavailable")
 			return
 		}
@@ -332,4 +342,31 @@ func (s *Server) collectorRotate(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) collectorRevoke(w http.ResponseWriter, r *http.Request) {
 	s.collectorRotateOrRevoke(w, r, false)
+}
+
+// collectorBindScope binds a migrated unscoped collector only once. Already
+// ingested events retain their original NULL company (no inferred ownership).
+func (s *Server) collectorBindScope(w http.ResponseWriter,r *http.Request) {
+ if !s.defenseMode(w) { return }
+ pg:=s.pg(w); if pg==nil {return}
+ id,ok:=workflowID(w,r); if !ok {return}
+ var input struct { CompanyID int64 `json:"company_id"` }
+ if !decodeDefenseWorkflow(w,r,&input) {return}
+ if input.CompanyID<=0 {writeErr(w,400,"valid company_id required");return}
+ ctx,cancel:=context.WithTimeout(r.Context(),5*time.Second);defer cancel()
+ tx,err:=pg.BeginTx(ctx,nil);if err!=nil{writeErr(w,503,"scope database unavailable");return};defer tx.Rollback()
+ var exists bool
+ if err:=tx.QueryRowContext(ctx,`SELECT EXISTS(SELECT 1 FROM companies WHERE id=$1)`,input.CompanyID).Scan(&exists);err!=nil{writeErr(w,503,"company lookup unavailable");return}
+ if !exists {writeErr(w,400,"company does not exist");return}
+ var updatedID int64
+ if err:=tx.QueryRowContext(ctx,`UPDATE defense_collectors SET company_id=$1
+ WHERE id=$2 AND company_id IS NULL AND revoked_at IS NULL RETURNING id`,input.CompanyID,id).Scan(&updatedID);err!=nil{
+  if errors.Is(err,sql.ErrNoRows){writeErr(w,409,"collector already bound or unavailable; create another identity to change scope");return}
+  writeErr(w,503,"collector binding unavailable");return
+ }
+ if _,err:=tx.ExecContext(ctx,`INSERT INTO defense_collector_audit(collector_id,operation,actor)
+ VALUES($1,'bound',$2)`,updatedID,s.approver(r));err!=nil{writeErr(w,503,"collector audit unavailable");return}
+ if err:=tx.Commit();err!=nil{writeErr(w,503,"collector scope commit failed");return}
+ w.Header().Set("Cache-Control","no-store")
+ writeJSON(w,200,map[string]any{"id":updatedID,"company_id":input.CompanyID,"note":"Existing unscoped events are not reassigned. Binding cannot be changed."})
 }

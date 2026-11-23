@@ -783,6 +783,7 @@ func (s *Server) Handler() http.Handler {
 	// Human-admin management: token returned only on create or rotate.
 	mux.HandleFunc("GET /api/defense/collectors", s.collectorList)
 	mux.HandleFunc("POST /api/defense/collectors", s.collectorCreate)
+	mux.HandleFunc("POST /api/defense/collectors/{id}/scope", s.collectorBindScope)
 	mux.HandleFunc("POST /api/defense/collectors/{id}/rotate", s.collectorRotate)
 	mux.HandleFunc("POST /api/defense/collectors/{id}/revoke", s.collectorRevoke)
 	mux.HandleFunc("GET /api/defense/events", s.listDefenseEvents)
