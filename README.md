@@ -2,15 +2,15 @@
 
 <img src="docs/assets/artex-defense-banner.webp" width="100%" alt="ARTEX-DEFENSE — Breaking Circuits mechanical griffin and SOC capabilities: Detect, Investigate, Contain, Review, Recover" />
 
-# ARTEX
+# ARTEX-DEFENSE
 
 **Evidence-first security testing and defense operations — autonomous where safe, human-controlled where it matters.**
 
 A self-hosted Go + PostgreSQL security platform with an embedded Next.js console.
 
-[![CI](https://github.com/breakingcircuits1337/ARTEX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/breakingcircuits1337/ARTEX?color=6b34db)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX?color=6b34db)](go.mod)
+[![CI](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/breakingcircuits1337/ARTEX-DEFENSE?color=6b34db)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX-DEFENSE?color=6b34db)](go.mod)
 [![Upstream releases](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=upstream%20release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
 
 [Quick start](#quick-start) · [Defense capabilities](#artex-defense-capabilities) · [Defensive setup](#defense-quick-start) · [Response safety](#defensive-response-safety) · [Architecture](#architecture) · [Installation](#installation) · [Security](SECURITY.md)
@@ -24,11 +24,13 @@ ARTEX supports **two distinct operating modes**. The original autonomous penetra
 | Mode | Set `ARTEX_MODE` | Purpose | Important boundary |
 | --- | --- | --- | --- |
 | **Defense** | `defense` | Passive exposure review, normalized event ingestion, case investigation, detection, SOC monitoring, and controlled response | Restrictive agent-tool policy; emergency actions require separately configured and armed controls |
-| **Penetration testing** | `pentest` (default) | Goal-driven planner/worker exploration, traffic evidence, asset and exploration graphs, retesting | Active testing **only on systems you own or are authorized to assess** |
+| **Penetration testing** | `pentest` (explicit opt-in in packaged deployments) | Goal-driven planner/worker exploration, traffic evidence, asset and exploration graphs, retesting | Active testing **only on systems you own or are authorized to assess** |
+
+**Default behavior:** The Breaking Circuits `.env.example`, Docker Compose stack, installer and `start.sh` now start in `defense` mode unless an operator explicitly sets `ARTEX_MODE=pentest`. Emergency containment remains `off` and must be configured and armed separately. For compatibility with the original Go project, directly invoking `./artex` with no environment still uses the legacy `pentest` default; always export `ARTEX_MODE=defense` when launching that binary directly. Changing the deployment default does not change already-configured `.env` files.
 
 The defense engine is **not simply the offensive agent with a different prompt**: Phase 1 enforces a fail-closed, code-level defensive tool allowlist. Later defense phases use separate bounded database analyses. The Phase 7 investigator is *deterministic*, not a free-running LLM with shell or scanning privileges.
 
-**Project lineage and license:** Original work by [Autumn-27](https://github.com/Autumn-27), subsequently continued in [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX); this [Breaking Circuits fork](https://github.com/breakingcircuits1337/ARTEX) adds the opt-in defensive platform. Licensed under [AGPL-3.0](LICENSE). Preserve upstream credits when redistributing.
+**Project lineage and license:** Original work by [Autumn-27](https://github.com/Autumn-27), subsequently continued in [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX); this [Breaking Circuits fork](https://github.com/breakingcircuits1337/ARTEX-DEFENSE) adds the opt-in defensive platform. Licensed under [AGPL-3.0](LICENSE). Preserve upstream credits when redistributing.
 
 ---
 
@@ -37,10 +39,10 @@ The defense engine is **not simply the offensive agent with a different prompt**
 Clone **this repository** and build the image from your checkout so the defensive features are included:
 
 ```bash
-git clone https://github.com/breakingcircuits1337/ARTEX.git
-cd ARTEX
+git clone https://github.com/breakingcircuits1337/ARTEX-DEFENSE.git
+cd ARTEX-DEFENSE
 cp .env.example .env              # set a strong POSTGRES_PASSWORD
-# In .env, set ARTEX_MODE=defense for the SOC, or leave pentest for testing
+# Set ARTEX_MODE=pentest only for authorized active testing; containment stays off.
 docker compose up -d --build      # self-hosted Go backend, web UI and PostgreSQL
 ```
 
@@ -51,13 +53,13 @@ printed at startup:
 docker compose logs artex | grep "Setup token"
 ```
 
-> **Fork build vs. upstream image:** The `ghcr.io/baarai/artex` image and BaaRai release links later in this README refer to the **upstream project**, not to a verified build of this Breaking Circuits fork. To run the defense phases, **build from this repository** as shown above; do not assume an upstream image includes the SOC or containment changes. For other installation methods see [Installation](#installation).
+> **Install this fork, not an upstream binary:** The upstream `ghcr.io/baarai/artex` image is **not** an ARTEX-DEFENSE build. Until the Breaking Circuits fork publishes its own release and GHCR package, use the checkout build above. See [Installation](#installation).
 
 ---
 
 ## ARTEX Defense capabilities
 
-Defense mode is an **opt-in, evidence-first security operations system**. Each capability below is implemented in this repository; actual production suitability depends on your sensor trust, configuration, infrastructure, and testing.
+Defense mode is the **default in this fork's packaged installations**, an evidence-first security operations system. Each capability below is implemented in this repository; actual production suitability depends on your sensor trust, configuration, infrastructure, and testing.
 
 | Stage | Capability | Operator-facing result | Source |
 | --- | --- | --- | --- |
@@ -92,7 +94,7 @@ The SOC live stream carries **only revision counters**, not raw events, password
 
 ### Defense quick start
 
-1. In `.env`, set `ARTEX_MODE=defense`, configure PostgreSQL credentials, and leave `ARTEX_AUTO_CONTAIN_MODE=off` for your first deployment.
+1. Copy `.env.example` to `.env`, provide a unique strong PostgreSQL password, and verify `ARTEX_MODE=defense` and `ARTEX_AUTO_CONTAIN_MODE=off` before your first deployment.
 2. Build from this fork with `docker compose up -d --build`. Log in at **http://localhost:8787** using the setup token shown by `docker compose logs artex`.
 3. Open **Functions → Defense SOC** (`/function/defense`) to view monitoring, event ingestion, alert priority, and detection-pack exports. Connect only authorized sensors over a trusted/private network.
 4. Use **Cases & Approvals** to open and review incidents; in an individual case, open **Threat intelligence & timeline** for the evidence graph, Phase 7 investigation runs, and immutable human verdicts.
@@ -377,7 +379,7 @@ worker remains confined to the intent it claimed.
 
 ## Installation
 
-> **Breaking Circuits fork:** For Phase 1–8 defensive functionality, install from this repository's source checkout. Instructions below for prebuilt `ghcr.io/baarai/artex` images and BaaRai releases are **upstream artifacts** and must not be assumed to include these defensive features.
+> **Breaking Circuits fork:** Use the local source checkout for Phase 1–8. The upstream `ghcr.io/baarai/artex` image and BaaRai releases do not provide a verified ARTEX-DEFENSE build.
 
 > Requires **PostgreSQL**; exploration requires an **LLM** (`ANTHROPIC_API_KEY` or
 > `OPENAI_API_KEY`, also configurable in the UI).
@@ -385,8 +387,8 @@ worker remains confined to the intent it claimed.
 ### Option 1: one-click install script (recommended)
 
 ```bash
-git clone https://github.com/breakingcircuits1337/ARTEX.git
-cd ARTEX
+git clone https://github.com/breakingcircuits1337/ARTEX-DEFENSE.git
+cd ARTEX-DEFENSE
 ./install.sh
 ```
 
@@ -406,114 +408,46 @@ first-run claim), or keep loopback and use a reverse proxy or SSH tunnel.
 Build from a checkout with Docker Compose:
 
 ```bash
-git clone https://github.com/breakingcircuits1337/ARTEX.git
-cd ARTEX
+git clone https://github.com/breakingcircuits1337/ARTEX-DEFENSE.git
+cd ARTEX-DEFENSE
 cp .env.example .env            # set POSTGRES_PASSWORD, optionally ANTHROPIC_API_KEY
 docker compose up -d --build
 # → http://localhost:8787
 ```
 
-The release workflow publishes a multi-arch image (`linux/amd64`, `linux/arm64`) to GitHub
-Container Registry on each `v*` tag, with tags `:latest`, `:v<version>`, and `:<version>`.
-v0.7.0 predates that step, so there is no `artex` package yet: until the next tagged release,
-use the checkout build above, and `docker-compose.ghcr.yml` and the `docker pull` below will
-fail with `denied`. GHCR packages start private; after the first publish the package visibility
-must be set to Public, and the release workflow verifies that the image pulls anonymously and
-fails the job otherwise.
+The source-built Compose stack is the **supported installation path for this fork today**.
+The image is built locally from this checkout, not pulled from an upstream package.
+Its dashboard binds to `127.0.0.1:8787` by default and the traffic proxy to
+`127.0.0.1:8788`. To expose the console on another machine, configure a
+properly authenticated TLS reverse proxy or private tunnel; do not publish an
+administrator console or telemetry endpoint directly to the Internet.
 
-Once the image is published, the standalone container requires an existing PostgreSQL database
-reachable from the container.
-Set the `ARTEX_PG_*` variables below. The example uses Docker Desktop's
-`host.docker.internal` to reach PostgreSQL on the host. On native Linux Docker Engine, add
-`--add-host=host.docker.internal:host-gateway` to `docker run` for a host database, or use
-the reachable hostname of your database server.
+### Option 3: fork releases and GHCR images (when available)
 
-```bash
-docker pull ghcr.io/baarai/artex:latest
+The repository release workflow is configured to publish binaries and a multi-arch
+image to `ghcr.io/breakingcircuits1337/artex-defense` on a tagged release.
+**No ARTEX-DEFENSE release/package has been verified as published yet.**
+Until one exists, use Option 1 or 2. Do not substitute
+`ghcr.io/baarai/artex`: that is an upstream image, not this fork.
 
-mkdir -p data keys
-docker run -d --name artex \
-  --security-opt no-new-privileges:true \
-  -p 127.0.0.1:8787:8787 \
-  -p 127.0.0.1:8788:8788 \
-  -e ARTEX_PG_HOST=host.docker.internal \
-  -e ARTEX_PG_PORT=5432 \
-  -e ARTEX_PG_USER=artex \
-  -e ARTEX_PG_PASSWORD='yourpass' \
-  -e ARTEX_PG_DBNAME=artex \
-  -e ARTEX_PG_SSLMODE=disable \
-  -e ARTEX_JWT_KEY_DIR=/app/keys \
-  -v "$PWD/data:/app/data" \
-  -v "$PWD/keys:/app/keys" \
-  ghcr.io/baarai/artex:latest
-# → http://localhost:8787  (docker logs artex | grep "Setup token")
-```
-
-In `docker-compose.yml` and `docker-compose.ghcr.yml`, `POSTGRES_PASSWORD` is passed to ARTEX as
-its own variable. The server percent-encodes it into the connection URL, so a password may contain
-`/`, `?`, `%`, `@`, `:` or spaces. In `.env`, quote a value that contains `#`, and write `$$` for a
-literal `$`. The `ARTEX_PG_*` variables take the password raw; quote it in a shell.
-
-The image includes a scanner toolchain (`nmap`, `nuclei`, `httpx`, `katana`, `ffuf`, `dalfox`,
-`sqlmap`, `ripgrep`, `curl`, `npm`, …) and built-in `/app/skills`. The GHCR Compose file below
-persists `./keys` and `./data`; it does not mount a host `skills/` directory, so the image's
-built-in skills are used.
-
-#### Compose stack from the prebuilt image
-
-`docker-compose.ghcr.yml` runs the same ARTEX + PostgreSQL stack from the released image, with no
-checkout build. The image is not published yet: v0.7.0 predates the GHCR publish step, so use the
-checkout build above until the next tagged release. Once the first image is published, download
-the file and `.env.example` once:
+After a release is published and the package is readable, use this repository's
+`docker-compose.ghcr.yml` together with a configured `.env`:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/BaaRai/ARTEX/main/docker-compose.ghcr.yml
-curl -fsSLO https://raw.githubusercontent.com/BaaRai/ARTEX/main/.env.example
-cp .env.example .env            # set POSTGRES_PASSWORD, optionally an LLM key
-docker compose -f docker-compose.ghcr.yml pull
-docker compose -f docker-compose.ghcr.yml up -d
-# → http://localhost:8787  (docker compose -f docker-compose.ghcr.yml logs artex | grep "Setup token")
-```
-
-Update the stack without a git checkout:
-
-```bash
+# Requires a published, accessible ARTEX-DEFENSE image.
+cp .env.example .env             # set a strong unique POSTGRES_PASSWORD
 docker compose -f docker-compose.ghcr.yml pull
 docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-Pin a version with `ARTEX_IMAGE_TAG=v0.7.1` in `.env` (or `0.7.1`); unset uses `latest`. To use
-custom skills, copy them into a host directory and add `- ./skills:/app/skills` to the `artex`
-volumes, which overrides the built-in `/app/skills`.
-
-For remote MCP you can choose `http` (Streamable HTTP) or `sse` (legacy SSE) in system settings.
-Legacy SSE servers usually establish the event stream with `GET /sse` and receive JSON-RPC over
-`/message?sessionId=...`; configure the URL as `/sse` and send `Authorization: Bearer <token>`.
-
-### Option 3: prebuilt binaries (Releases)
-
-Download the zip for your platform from [Releases](https://github.com/BaaRai/ARTEX/releases). It
-contains `artex`, `start.sh` (`start.bat` on Windows), `skills/` and `config.example.json`:
-
-```bash
-cp config.example.json config.json   # fill in the database connection
-./start.sh                           # → http://localhost:8787
-```
-
-Start with `start.sh` / `start.bat`, not `./artex`: it is a daemon script that restarts the process
-after a backoff. To keep it in the background: `nohup ./start.sh >artex.log 2>&1 &`.
-
-#### Verifying a release
-
-Each release attaches `SHA256SUMS` and a CycloneDX SBOM, `artex-<tag>.cdx.json` (Go modules in the
-linux/amd64 binary, the frontend `package-lock.json`, `go.mod`/`go.sum`), next to the zips. The zips
-also carry a GitHub build provenance attestation. Releases published before this was added have
-neither.
-
-```bash
-sha256sum -c SHA256SUMS                           # add --ignore-missing if you downloaded only some zips
-gh attestation verify <zip> --repo BaaRai/ARTEX   # built by this repository's release workflow
-```
+The default image name in this Compose file intentionally targets **this fork**.
+Both the source-build and image-based examples default to defense mode and leave
+emergency containment off. Any existing `.env` overrides remain in effect.
+For a released binary, obtain artifacts from
+[Breaking Circuits releases](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/releases),
+verify `SHA256SUMS` and available attestations against
+`breakingcircuits1337/ARTEX-DEFENSE`, and export `ARTEX_MODE=defense` if starting
+`./artex` directly. The `start.sh` wrapper already sets that default.
 
 ### Option 4: build the single binary from source
 
@@ -860,7 +794,7 @@ Your data is unaffected: `./data`, the `pgdata` volume and `./skills` are not pa
 #### Option 1: one-click update script
 
 ```bash
-cd ARTEX
+cd ARTEX-DEFENSE
 ./update.sh
 ```
 
@@ -871,16 +805,14 @@ recompile `./artex`; restart the process for it to take effect).
 #### Option 2: Docker (Compose or GHCR image)
 
 ```bash
-cd ARTEX
+cd ARTEX-DEFENSE
 git pull
 docker compose build artex
 docker compose up -d artex
 docker image prune -f            # optional
 ```
 
-If running the prebuilt `ghcr.io/baarai/artex` container directly, pull the new tag (`docker pull
-ghcr.io/baarai/artex:latest` or a pinned `:v<version>`) and recreate the container with the same
-`/app/data` and `/app/keys` mounts. If you run the prebuilt Compose stack, the update is:
+Once this fork publishes an image, pull a pinned tag from `ghcr.io/breakingcircuits1337/artex-defense` and recreate the container with its existing `/app/data` and `/app/keys` mounts. If you run the fork's prebuilt Compose stack, the update is:
 
 ```bash
 docker compose -f docker-compose.ghcr.yml pull
@@ -1018,7 +950,7 @@ Operational security properties:
 
 ## About this fork
 
-This [Breaking Circuits ARTEX repository](https://github.com/breakingcircuits1337/ARTEX) builds on ARTEX originally created by [Autumn-27](https://github.com/Autumn-27), with its English-language continuation maintained at [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX). This fork retains the original penetration-testing capabilities and adds an opt-in defensive tool guard, authenticated telemetry, investigation graphs, real-time SOC, and narrowly scoped emergency auto-containment. The historical work and contributing authors remain acknowledged, and the fork is distributed under the same [AGPL-3.0](LICENSE).
+This [Breaking Circuits ARTEX repository](https://github.com/breakingcircuits1337/ARTEX-DEFENSE) builds on ARTEX originally created by [Autumn-27](https://github.com/Autumn-27), with its English-language continuation maintained at [BaaRai/ARTEX](https://github.com/BaaRai/ARTEX). This fork retains the original penetration-testing capabilities and adds a default-on-for-packaged-installs defensive tool guard, authenticated telemetry, investigation graphs, real-time SOC, and narrowly scoped emergency auto-containment. The historical work and contributing authors remain acknowledged, and the fork is distributed under the same [AGPL-3.0](LICENSE).
 
 ---
 

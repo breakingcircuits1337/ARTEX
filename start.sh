@@ -1,5 +1,5 @@
 #!/bin/sh
-# ARTEX supervisor start script (Linux / macOS / Docker ENTRYPOINT)
+# ARTEX-DEFENSE supervisor start script (Linux / macOS / Docker ENTRYPOINT)
 #
 # Usage:
 #   ./start.sh                       run in the foreground (Ctrl-C to stop)
@@ -13,6 +13,11 @@
 set -u
 
 cd "$(dirname "$0")" || exit 1
+
+# The raw binary retains a legacy pentest fallback; the fork wrapper does not.
+# Explicit ARTEX_MODE=pentest remains available for authorized active testing.
+ARTEX_MODE=${ARTEX_MODE:-defense}
+export ARTEX_MODE
 
 BIN=./artex
 [ -x "$BIN" ] || { echo "[artex] executable $BIN not found" >&2; exit 1; }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ARTEX install script: 1) all-Docker  2) local build & run
+# ARTEX-DEFENSE installer: 1) all-Docker  2) local build & run
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd)"
 
@@ -164,12 +164,15 @@ JSON
   fi
   ok "build complete → ./artex"
 
-  info "starting... (Ctrl-C to exit)"
+  # The raw Go binary retains the upstream pentest fallback. Never inherit it
+  # from this fork's installer unless the operator explicitly opted in.
+  export ARTEX_MODE="${ARTEX_MODE:-defense}"
+  info "starting in ARTEX_MODE=$ARTEX_MODE (Ctrl-C to exit)"
   ./artex
 }
 
 echo "=============================="
-echo "  ARTEX Install"
+echo "  ARTEX-DEFENSE Install"
 echo "  1) All-Docker install"
 echo "  2) Run locally (go build)"
 echo "=============================="

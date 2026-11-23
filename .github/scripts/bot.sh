@@ -124,11 +124,11 @@ case "$event_name" in
     title=$(jq -r '.issue.title' <<<"$ev")
     body=$(jq -r '.issue.body // ""' <<<"$ev")
     maintainer_opened=false
-    [ "$GITHUB_ACTOR" = "BaaRai" ] && maintainer_opened=true
+    [ "$GITHUB_ACTOR" = "${GITHUB_REPOSITORY%%/*}" ] && maintainer_opened=true
     if [ "$maintainer_opened" = false ] && already_triaged "$number"; then log "issue #$number already triaged"; exit 0; fi
     [ "$maintainer_opened" = false ] && eyes "$number"
     answer=$(ask_model \
-      'You are the triage bot of an open-source Go + Next.js repository (an autonomous penetration testing agent system; AGPL-3.0). Respond ONLY with a single JSON object, no markdown, no prose outside the JSON, exactly of this shape: {"comment": "<your triage comment, max 180 words, same language as the report>", "labels": ["<zero or more of: bug, question, feature, P1, P2, P3>"]}. Classify the report as bug, question, or feature request; if it is a question, answer it concisely using the repository file list as context in the comment; if it is a bug report, the comment says what reproduction steps or version information are missing; if it is a feature request, the comment restates it in one sentence; add a priority label (P1 security impact or data loss, P2 core functionality broken, P3 minor or cosmetic) only for bugs; use an empty labels array if nothing fits. The repository summary lists directories with counts and a few key paths, not every file: never state that a file, directory or feature does not exist because it is missing from it, say you are not sure instead.' \
+      'You are the triage bot of an open-source Go + Next.js repository (a dual-mode ARTEX-DEFENSE security testing and defensive SOC platform; AGPL-3.0). Respond ONLY with a single JSON object, no markdown, no prose outside the JSON, exactly of this shape: {"comment": "<your triage comment, max 180 words, same language as the report>", "labels": ["<zero or more of: bug, question, feature, P1, P2, P3>"]}. Classify the report as bug, question, or feature request; if it is a question, answer it concisely using the repository file list as context in the comment; if it is a bug report, the comment says what reproduction steps or version information are missing; if it is a feature request, the comment restates it in one sentence; add a priority label (P1 security impact or data loss, P2 core functionality broken, P3 minor or cosmetic) only for bugs; use an empty labels array if nothing fits. The repository summary lists directories with counts and a few key paths, not every file: never state that a file, directory or feature does not exist because it is missing from it, say you are not sure instead.' \
       "Issue title: $title
 
 Issue body:
@@ -162,7 +162,7 @@ $(repo_context)" json)
     echo "$body" | grep -qi '@artex-bot' || { log "no mention; skipping"; exit 0; }
     eyes "$number"
     answer=$(ask_model \
-      'You are the helper bot of an open-source Go + Next.js repository (an autonomous penetration testing agent system; AGPL-3.0). Someone pinged you with a question about this repository. Answer it concisely from the repository summary, saying plainly when you are not sure and suggesting a proper issue. Never state that a file, directory or feature does not exist because it is missing from that summary: it lists directories, not every file. Maximum 180 words, plain markdown, reply in the language of the question.' \
+      'You are the helper bot of an open-source Go + Next.js repository (a dual-mode ARTEX-DEFENSE security testing and defensive SOC platform; AGPL-3.0). Someone pinged you with a question about this repository. Answer it concisely from the repository summary, saying plainly when you are not sure and suggesting a proper issue. Never state that a file, directory or feature does not exist because it is missing from that summary: it lists directories, not every file. Maximum 180 words, plain markdown, reply in the language of the question.' \
       "Question:
 $question
 
@@ -179,7 +179,7 @@ $(repo_context)")
     eyes "$number"
     diff=$(gh pr diff "$number" 2>/dev/null | head -c 4000)
     answer=$(ask_model \
-      'You are the first-look bot of an open-source Go + Next.js repository (an autonomous penetration testing agent system; AGPL-3.0). Summarize what this pull request changes in two or three sentences, then a short checklist: does it include or update tests, does it touch documentation where needed, does anything look inconsistent with the described goal. You are commenting for information only; you do not approve or request changes. Maximum 180 words, plain markdown.' \
+      'You are the first-look bot of an open-source Go + Next.js repository (a dual-mode ARTEX-DEFENSE security testing and defensive SOC platform; AGPL-3.0). Summarize what this pull request changes in two or three sentences, then a short checklist: does it include or update tests, does it touch documentation where needed, does anything look inconsistent with the described goal. You are commenting for information only; you do not approve or request changes. Maximum 180 words, plain markdown.' \
       "Pull request title: $title
 
 Pull request description:

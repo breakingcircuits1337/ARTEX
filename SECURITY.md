@@ -1,39 +1,50 @@
-# Security Policy
+# ARTEX-DEFENSE Security Policy
 
 ## Supported Versions
 
-ARTEX is an autonomous penetration-testing tool. Security fixes are provided only for the latest official release line. The `main` branch is not considered a stable release and may change at any time.
+This policy covers **Breaking Circuits' ARTEX-DEFENSE fork**, not third-party
+ARTEX releases or unrelated downstream builds. At this stage the repository has
+**no tagged ARTEX-DEFENSE release**; fixes are developed on `main` on a best-effort
+basis. `main` is under active development, is not a stable security-certified
+release, and may change without notice. Once this fork publishes a versioned
+release, this section should be updated to name supported release lines.
 
-Only the latest release line receives security fixes. Older releases do not receive fixes; please upgrade to the latest release.
-
-Notes:
-- Please upgrade to the latest release before reporting a vulnerability.
-- Forks, custom builds from arbitrary commits, and modified versions are not covered by official support.
+Please provide the exact fork commit SHA or image digest when reporting a problem.
+Vulnerabilities that affect an upstream component should also be coordinated
+with its maintainers, without disclosing a fork vulnerability publicly.
 
 ## Reporting a Vulnerability
 
-**Do not open a public issue for a security vulnerability.**
+**Do not disclose exploit details, credentials, logs containing sensitive data,
+or reproduction payloads in a public issue or pull request.**
 
-Sign in to GitHub and use the [private vulnerability report form](https://github.com/BaaRai/ARTEX/security/advisories/new). You can also reach it from the repository's **Security and quality** tab under **Advisories** → **Report a vulnerability**. This is the only reporting channel.
+Use this fork's [GitHub private vulnerability reporting form](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/security/advisories/new)
+when it is available. Private vulnerability reporting is a **GitHub repository
+setting**, not something this Markdown file can enable: maintainers must enable it
+under the repository's security settings and verify the form works for reporters.
 
-Please include:
-- A description of the vulnerability and its expected impact.
-- The ARTEX version and/or commit hash.
-- Runtime environment (OS, Docker/local, PostgreSQL, LLM provider, etc.).
-- Minimal reproduction steps (PoC).
-- Logs, screenshots, or sample traffic with **sensitive data removed**.
-- Suggested remediation, if available.
+If the private reporting form is not available, **do not post vulnerability
+details publicly**. Request that the Breaking Circuits maintainer enable a private
+reporting channel; a public issue may contain only a generic request for a
+private contact method, with no technical details or identifying evidence.
+Do not send fork vulnerabilities to the upstream BaaRai advisory form as a
+substitute for contacting this fork's maintainers.
 
-**Do not send** real third-party data, credentials, tokens, customer data, or unredacted sensitive content.
+Please include privately:
+- The affected ARTEX-DEFENSE commit/release and expected impact.
+- Deployment mode (`defense` or `pentest`), OS, Docker/runtime and database version.
+- Minimal steps to reproduce using assets you own or are authorized to test.
+- Redacted logs and evidence, with no secrets or third-party personal data.
+- Suggested mitigation or fix, if available.
 
 ## Scope and Authorized Testing
 
-ARTEX is an offensive-security tool. Test only against:
-- Your own ARTEX deployment in a lab or local environment;
-- Systems you own;
-- Targets explicitly authorized in writing (bug bounty, pentest contract, etc.).
-
-Testing, scanning, or exploiting third-party systems without explicit authorization is strictly prohibited. Reports that violate this principle may be closed without action.
+ARTEX-DEFENSE includes an opt-in penetration-testing mode alongside defensive
+SOC workflows. Test only against deployments and networks you own or for which
+you have explicit written authorization. Do not run active assessment against
+third-party systems without their permission. Emergency containment must be
+separately authorized, reviewed and tested in simulation before use on live
+networks; enabling defense mode does **not** enable automatic blocking.
 
 ## Trusted Inputs and Scope Enforcement
 
