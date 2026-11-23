@@ -60,3 +60,24 @@ $$;
 CREATE TRIGGER defense_case_scope_insert
 BEFORE INSERT ON defense_case_observations
 FOR EACH ROW EXECUTE FUNCTION defense_case_scope_guard();
+
+-- Reject a mismatch even when a future import path writes directly to SQL.
+-- Unbound historical collectors with NULL company still satisfy the check;
+-- the public collector HTTP endpoint refuses them until bound.
+CREATE OR REPLACE FUNCTION defense_event_company_guard()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE bound_company BIGINT;
+BEGIN
+  IF NEW.collector_id IS NOT NULL THEN
+    SELECT c.company_id INTO bound_company FROM defense_collectors c
+      WHERE c.id=NEW.collector_id;
+    IF bound_company IS DISTINCT FROM NEW.company_id THEN
+      RAISE EXCEPTION 'event company differs from enrolled collector company';
+    END IF;
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER defense_event_company_insert
+  BEFORE INSERT OR UPDATE OF collector_id,company_id ON defense_events
+  FOR EACH ROW EXECUTE FUNCTION defense_event_company_guard();
