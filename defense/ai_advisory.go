@@ -89,11 +89,47 @@ func validateAIText(raw string,lo,hi int)error {
 // ParseAIAdvice rejects unknown fields, duplicate JSON fields, unsupported
 // model artifacts, invalid evidence references, and unsupported verdict/action
 // fields. A successful parse is STILL NOT evidence verification.
+// rejectDuplicateAIKeys catches conflicting repeated JSON keys even inside
+// nested model findings. DisallowUnknownFields alone does not reject repeats.
+func rejectDuplicateAIKeys(raw []byte)error{
+    dec:=json.NewDecoder(bytes.NewReader(raw))
+    var walk func()error
+    walk=func()error{
+        tok,err:=dec.Token()
+        if err!=nil{return err}
+        delim,ok:=tok.(json.Delim)
+        if !ok{return nil}
+        switch delim{
+        case '{':
+            seen:=map[string]bool{}
+            for dec.More(){
+                keyToken,err:=dec.Token()
+                if err!=nil{return err}
+                key,ok:=keyToken.(string)
+                if !ok{return errors.New("invalid JSON key")}
+                if seen[key]{return errors.New("duplicate AI advisory JSON key")}
+                seen[key]=true
+                if err=walk();err!=nil{return err}
+            }
+            _,err=dec.Token()
+            return err
+        case '[':
+            for dec.More(){
+                if err=walk();err!=nil{return err}
+            }
+            _,err=dec.Token()
+            return err
+        default:return errors.New("invalid JSON delimiter")
+        }
+    }
+    return walk()
+}
 func ParseAIAdvice(raw string, refs map[string]int64) (AIAdvice,error) {
     var out AIAdvice
     if len(raw)<2 || len(raw)>MaxAIAdviceBytes || !utf8.ValidString(raw){
         return out,errors.New("AI response size out of bounds")
     }
+    if err:=rejectDuplicateAIKeys([]byte(raw));err!=nil{return AIAdvice{},err}
     dec:=json.NewDecoder(bytes.NewReader([]byte(raw)))
     dec.DisallowUnknownFields()
     if err:=dec.Decode(&out);err!=nil{return AIAdvice{},errors.New("invalid AI advisory JSON")}

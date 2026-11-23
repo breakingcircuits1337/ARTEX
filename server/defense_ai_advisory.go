@@ -118,6 +118,19 @@ func (s *Server) reserveAIReview(ctx context.Context,caseID int64,packetHash str
     if err!=nil{return 0,err}
     defer tx.Rollback()
     if _,err=tx.ExecContext(ctx,`SELECT pg_advisory_xact_lock($1)`,defenseAIQuotaLock);err!=nil{return 0,err}
+    // Reap only abandoned synchronous requests. Normal model calls have a
+    // strict 35-second deadline; >2 minutes cannot be legitimately active.
+    // Preserve the failed row and audit so a server crash cannot permanently
+    // block future operator requests to review the case.
+    if _,err=tx.ExecContext(ctx,`
+      WITH expired AS (
+        UPDATE defense_ai_review_runs
+        SET status='failed',error_code='provider_error',completed_at=now()
+        WHERE status='running' AND created_at<now()-interval '2 minutes'
+        RETURNING id
+      )
+      INSERT INTO defense_ai_review_audit(run_id,event_type,actor,detail_code)
+      SELECT id,'failed','ai-advisory','provider_error' FROM expired`);err!=nil{return 0,err}
     var status string
     if err=tx.QueryRowContext(ctx,`SELECT status FROM defense_cases WHERE id=$1 FOR SHARE`,caseID).Scan(&status);err!=nil{return 0,err}
     if !defense.ActiveCase(status){return 0,errAIClosedCase}
