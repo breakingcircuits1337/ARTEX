@@ -278,11 +278,39 @@ func (s *Server) getDefenseIntelligence(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, 503, "mapping iterator failed")
 		return
 	}
+	rows, err = pg.QueryContext(r.Context(), `
+		SELECT id,source_indicator_id,target_indicator_id,evidence_event_id,relation
+		  FROM defense_case_relations WHERE case_id=$1 ORDER BY id LIMIT 250`, id)
+	if err != nil {
+		writeErr(w, 503, "indicator relations unavailable")
+		return
+	}
+	relations := make([]map[string]any, 0)
+	for rows.Next() {
+		var relationID, sourceID, targetID, evidenceID int64
+		var kind string
+		if err := rows.Scan(&relationID, &sourceID, &targetID, &evidenceID, &kind); err != nil {
+			rows.Close()
+			writeErr(w, 503, "relation scan failed")
+			return
+		}
+		relations = append(relations, map[string]any{
+			"id": relationID, "source_indicator_id": sourceID,
+			"target_indicator_id": targetID, "evidence_event_id": evidenceID,
+			"relation": kind, "causal_claim": false,
+		})
+	}
+	scanErr = rows.Err()
+	rows.Close()
+	if scanErr != nil {
+		writeErr(w, 503, "relation iterator failed")
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"case_id": id, "mode": "read_only",
 		"indicators": indicators, "observations": observations,
-		"techniques": techniques,
+		"relations": relations, "techniques": techniques,
 		"note": "Confidence scores describe evidence linkage or analyst hypotheses, never probability of compromise. Evidence may be incomplete and correlation is not attribution.",
 	})
 }
