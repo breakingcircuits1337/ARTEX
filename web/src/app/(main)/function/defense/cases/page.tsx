@@ -56,6 +56,13 @@ type Preview = {
   warning: string;
   playbook: Playbook;
 };
+type EvidenceGraph = {
+  case_id: number;
+  mode: string;
+  note: string;
+  nodes: { id: string; kind: string; label: string }[];
+  edges: { source: string; target: string; relation: string }[];
+};
 
 const stamp = (s: string) => new Date(s).toLocaleString();
 const active = (status: string) => status === "open" || status === "investigating";
@@ -72,6 +79,7 @@ export default function ResponseReviewPage() {
   const [decisionReason, setDecisionReason] = React.useState("");
   const [auditCase, setAuditCase] = React.useState<number | null>(null);
   const [audit, setAudit] = React.useState<AuditRow[]>([]);
+  const [graph, setGraph] = React.useState<EvidenceGraph | null>(null);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
@@ -123,6 +131,15 @@ export default function ResponseReviewPage() {
       setAudit(response.audit);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Audit unavailable");
+    }
+  }
+
+  async function readGraph(id: number) {
+    try {
+      const result = await http<EvidenceGraph>(`/defense/cases/${id}/graph`);
+      setGraph(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Graph unavailable");
     }
   }
 
@@ -238,6 +255,7 @@ export default function ResponseReviewPage() {
                   {active(c.status) && <Button disabled={busy} variant="outline"
                     onClick={() => void triage(c, "dismissed")}>Dismiss</Button>}
                   <Button disabled={busy} variant="outline" onClick={() => void readAudit(c.id)}>Audit trail</Button>
+                  <Button disabled={busy} variant="outline" onClick={() => void readGraph(c.id)}>Evidence graph</Button>
                 </div>
               </div>
             </div>
@@ -310,6 +328,34 @@ export default function ResponseReviewPage() {
             <p>{preview.warning}</p>
             <p className="font-semibold">{preview.playbook.name}</p>
             <ol className="list-decimal space-y-1 pl-5">{preview.playbook.steps.map(step => <li key={step}>{step}</li>)}</ol>
+          </CardContent>
+        </Card>
+      )}
+
+      {graph && (
+        <Card>
+          <CardHeader><CardTitle>Case #{graph.case_id} — linked evidence graph</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-muted-foreground">{graph.note}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <p className="font-semibold">Recorded nodes</p>
+                {graph.nodes.map(node => (
+                  <div key={node.id} className="rounded-md border p-2">
+                    <strong>{node.kind.replaceAll("_", " ")}</strong> · {node.id}
+                    <p className="text-muted-foreground">{node.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <p className="font-semibold">Evidence relationships</p>
+                {graph.edges.map((edge, index) => (
+                  <div key={`${edge.source}:${edge.target}:${index}`} className="rounded-md border p-2">
+                    {edge.source} → <strong>{edge.relation.replaceAll("_", " ")}</strong> → {edge.target}
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
