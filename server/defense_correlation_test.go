@@ -236,7 +236,6 @@ func TestIndicatorCrossCaseEvidenceIsRejectedPG(t *testing.T) {
 // Ensure a malformed case ID cannot accidentally trigger an expensive query.
 func TestIntelligenceEndpointsRejectInvalidCaseID(t *testing.T) {
 	t.Setenv("ARTEX_MODE", "defense")
-	s := &Server{}
 	// Test the helper itself; database availability is checked only after
 	// authentication/route match in the HTTP handler.
 	r := httptest.NewRequest(http.MethodGet, "/api/defense/cases/nope/timeline", nil)
