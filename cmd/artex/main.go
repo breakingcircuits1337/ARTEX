@@ -19,6 +19,7 @@ import (
 
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/config"
+	"github.com/Autumn-27/artex/defense"
 	"github.com/Autumn-27/artex/egress"
 	"github.com/Autumn-27/artex/server"
 )
@@ -28,6 +29,7 @@ import (
 // config.Redact, and no key or token value is ever included.
 type configSnapshot struct {
 	Version           string   `json:"version"`
+	Mode              string   `json:"mode"`
 	ConfigFile        string   `json:"config_file"`
 	ConfigFileFound   bool     `json:"config_file_found"`
 	PGDSN             string   `json:"pg_dsn"`
@@ -107,6 +109,10 @@ func run() int {
 		execGID = flag.Int("exec-gid", server.DefaultExecGID, "gid that agent processes run as")
 	)
 	flag.Parse()
+	if err := defense.Validate(); err != nil {
+		log.Printf("[config] %v", err)
+		return 1
+	}
 
 	// hand the build version to the server package so GET /api/health can report it
 	// to the frontend top bar.
@@ -158,6 +164,7 @@ func run() int {
 	}
 	logConfigSnapshot(configSnapshot{
 		Version:           version,
+		Mode:              defense.Mode(),
 		ConfigFile:        cfgPath,
 		ConfigFileFound:   cfgFound,
 		PGDSN:             config.Redact(dsn),
