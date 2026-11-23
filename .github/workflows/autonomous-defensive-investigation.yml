@@ -46,7 +46,7 @@ jobs:
           go-version-file: go.mod
       - name: Verify gofmt on every new investigation source file
         run: |
-          files=$(gofmt -l defense/investigator.go defense/investigator_test.go server/defense_investigation_worker.go server/defense_investigation_api.go server/defense_investigation_graph.go server/defense_investigation_test.go)
+          files=$(gofmt -l defense/investigator.go defense/investigator_test.go server/defense_investigation_worker.go server/defense_investigation_api.go server/defense_investigation_graph.go server/defense_investigation_test.go server/defense_investigation_control_test.go)
           if [ -n "$files" ]; then printf 'gofmt required:\n%s\n' "$files"; exit 1; fi
       - name: Compile all Go packages
         run: go build ./...
@@ -55,7 +55,7 @@ jobs:
       - name: Verify deterministic safety and PostgreSQL integration
         run: >-
           go test -count=1 ./defense ./server
-          -run 'Test(AnalyzeInvestigation|DefensiveInvestigator|InvestigationHuman|InvestigationQueue)'
+          -run 'Test(AnalyzeInvestigation|DefensiveInvestigator|InvestigationHuman|InvestigationQueue|InvestigationAuto|QueuedInvestigation)'
       - name: Verify fresh database migrations
         run: go test -count=1 ./db -run 'TestOpenMigratesFreshDatabase'
   frontend:
