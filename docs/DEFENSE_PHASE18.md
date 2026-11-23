@@ -82,3 +82,11 @@ bash scripts/test-defense-defaults.sh
 
 The CI release workflow invokes the `artifacts` and `metadata` stages
 after cross-platform packaging and after SBOM generation, respectively.
+
+## Vulnerability gate found and addressed during PR #18
+
+The initial reachable-source Go scanner surfaced **GO-2026-6278** in
+`github.com/gorilla/websocket@v1.5.3`. The branch updates the dependency
+to `v1.5.4-0.20250319132907-e064f32e3674`, a later upstream commit
+with verifiable module checksums. Keep `govulncheck` blocking and ensure
+the entire Go test matrix passes; this is not a reason to disable the gate.
