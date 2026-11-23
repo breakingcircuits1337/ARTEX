@@ -62,49 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_defense_relations_case ON defense_case_relations(
 CREATE TABLE IF NOT EXISTS defense_case_techniques (
     id BIGSERIAL PRIMARY KEY,
     case_id BIGINT NOT NULL REFERENCES defense_cases(id) ON DELETE RESTRICT,
-    technique_id TEXT NOT NULL CHECK(technique_id ~ '^T[0-9]{4}([.][0-9]{3})?),
-    tactic_id TEXT NOT NULL DEFAULT '' CHECK(tactic_id='' OR tactic_id ~ '^TA[0-9]{4}$'),
-    confidence SMALLINT NOT NULL CHECK(confidence BETWEEN 0 AND 100),
-    mapping_source TEXT NOT NULL CHECK(mapping_source IN ('rule_hint','analyst_hypothesis')),
-    rationale TEXT NOT NULL CHECK(length(rationale) BETWEEN 12 AND 1200),
-    evidence_event_id BIGINT NOT NULL REFERENCES defense_events(id) ON DELETE RESTRICT,
-    mapped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(case_id,technique_id,evidence_event_id,mapping_source),
-    FOREIGN KEY(case_id,evidence_event_id) REFERENCES defense_case_observations(case_id,event_id)
-);
-CREATE INDEX IF NOT EXISTS idx_defense_techniques_case ON defense_case_techniques(case_id,mapped_at DESC,id DESC);
-
-CREATE TABLE IF NOT EXISTS defense_case_intel_audit (
-    id BIGSERIAL PRIMARY KEY,
-    case_id BIGINT NOT NULL REFERENCES defense_cases(id) ON DELETE RESTRICT,
-    audit_kind TEXT NOT NULL CHECK(audit_kind IN ('refreshed','technique_mapped')),
-    actor TEXT NOT NULL CHECK(actor IN ('correlator','console-admin')),
-    detail TEXT NOT NULL CHECK(length(detail) BETWEEN 1 AND 1200),
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_defense_intel_audit_case
-    ON defense_case_intel_audit(case_id,recorded_at DESC,id DESC);
-
-CREATE OR REPLACE FUNCTION defense_reject_intel_audit_mutation()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  RAISE EXCEPTION 'defense_case_intel_audit is append-only';
-END
-$$;
-DROP TRIGGER IF EXISTS defense_intel_audit_immutable ON defense_case_intel_audit;
-CREATE TRIGGER defense_intel_audit_immutable
-BEFORE UPDATE OR DELETE ON defense_case_intel_audit
-FOR EACH ROW EXECUTE FUNCTION defense_reject_intel_audit_mutation();
-
--- Bounded, same-source, two-field event correlation benefits from these
--- indexes. The case correlation query never scans arbitrary remote assets.
-CREATE INDEX IF NOT EXISTS idx_defense_events_source_pair_time
-  ON defense_events(source,src_ip,dst_ip,observed_at DESC,id DESC)
-  WHERE src_ip<>'' AND dst_ip<>'';
-CREATE INDEX IF NOT EXISTS idx_defense_events_source_host_time
-  ON defense_events(source,host,src_ip,observed_at DESC,id DESC)
-  WHERE host<>'' AND src_ip<>'';
-),
+    technique_id TEXT NOT NULL CHECK(technique_id ~ '^T[0-9]{4}([.][0-9]{3})?$'),
     tactic_id TEXT NOT NULL DEFAULT '' CHECK(tactic_id='' OR tactic_id ~ '^TA[0-9]{4}$'),
     confidence SMALLINT NOT NULL CHECK(confidence BETWEEN 0 AND 100),
     mapping_source TEXT NOT NULL CHECK(mapping_source IN ('rule_hint','analyst_hypothesis')),
