@@ -72,7 +72,7 @@ export const sidebarItems: NavGroup[] = [
       { id: "chat", title: t("Chat"), url: "/chat", icon: MessageSquare },
       { id: "tasks", title: t("Tasks"), url: "/function/tasks", icon: Target },
       { id: "findings", title: t("Findings"), url: "/function/findings", icon: Bug },
-      { id: "defense", title: t("Defense SOC"), url: "/function/defense", icon: ShieldAlert },
+      { id: "defense", title: "Defense SOC", url: "/function/defense", icon: ShieldAlert },
       { id: "traffic", title: t("Traffic"), url: "/function/traffic", icon: Activity },
       { id: "commands", title: t("Tool Execution"), url: "/function/commands", icon: Terminal },
       { id: "llm-records", title: t("LLM Recording"), url: "/function/llm-records", icon: Radio },
