@@ -634,6 +634,7 @@ func (t *ToolSet) assessExposure() actool.CoreTool {
 		}, "ids"),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.as == nil { return actool.Errorf("asset inventory is unavailable"), nil }
+			if t.taskID <= 0 { return actool.Errorf("assess_exposure requires a task-scoped context"), nil }
 			var args struct { IDs []int64 `json:"ids"` }
 			if err := json.Unmarshal(in, &args); err != nil { return actool.Errorf("invalid asset IDs"), nil }
 			if len(args.IDs) == 0 || len(args.IDs) > 50 { return actool.Errorf("provide 1..50 asset IDs"), nil }
