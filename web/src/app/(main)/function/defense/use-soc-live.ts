@@ -43,6 +43,13 @@ export function useSOCLive(onRevision: () => void): StreamState {
       setState("connecting");
       let ready = false;
       const initialWatchdog = window.setTimeout(() => connection.abort(), 10000);
+      let idleWatchdog: number | undefined;
+      const restartIdleWatchdog = () => {
+        if (idleWatchdog !== undefined) window.clearTimeout(idleWatchdog);
+        // A proxy may flush the first frame, then buffer later updates.
+        // Fall back to polling if heartbeats stop arriving.
+        idleWatchdog = window.setTimeout(() => connection.abort(), 40000);
+      };
       try {
         const token = window.localStorage.getItem("artex_token");
         const response = await fetch(socStreamURL(), {
@@ -64,6 +71,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
         while (!stopped && !connection.signal.aborted) {
           const { value, done } = await reader.read();
           if (done) break;
+          restartIdleWatchdog();
           // Never accumulate unbounded, untrusted stream bytes.
           pending += decoder.decode(value, { stream: true });
           if (pending.length > 16384) throw new Error("Invalid SOC stream frame");
@@ -109,6 +117,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
         // server restart, and interrupted network connections.
       } finally {
         window.clearTimeout(initialWatchdog);
+        if (idleWatchdog !== undefined) window.clearTimeout(idleWatchdog);
         if (myGeneration === generation) active = false;
         if (controller === connection) controller = null;
         connection.abort();
