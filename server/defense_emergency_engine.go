@@ -35,18 +35,6 @@ func (s *Server) stageEmergencyAction(
 	if !possibleIDS && !possibleSpray {
 		return 0, nil
 	}
-	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", emergencyQueueLock); err != nil {
-		return 0, err
-	}
-	// A share lock prevents an operator pause from racing with admission.
-	var paused bool
-	if err := tx.QueryRowContext(ctx,
-		"SELECT paused FROM defense_emergency_control WHERE id=1 FOR SHARE").Scan(&paused); err != nil {
-		return 0, err
-	}
-	if paused {
-		return 0, nil
-	}
 	var repeatedAlerts, accounts int
 	if possibleIDS {
 		err = tx.QueryRowContext(ctx, `
@@ -73,6 +61,20 @@ func (s *Server) stageEmergencyAction(
 	}
 	decision, eligible := cfg.Decide(event, now, repeatedAlerts, accounts)
 	if !eligible {
+		return 0, nil
+	}
+	// Only corroborated emergencies contend on the global budget lock.
+	// This keeps unrelated sensor events off the serialized fast path.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", emergencyQueueLock); err != nil {
+		return 0, err
+	}
+	// The SHARE lock coordinates with operator pause through transaction commit.
+	var paused bool
+	if err := tx.QueryRowContext(ctx,
+		"SELECT paused FROM defense_emergency_control WHERE id=1 FOR SHARE").Scan(&paused); err != nil {
+		return 0, err
+	}
+	if paused {
 		return 0, nil
 	}
 	var suppressed bool
