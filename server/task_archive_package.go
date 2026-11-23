@@ -574,6 +574,22 @@ func stageTaskArchivePackageDelete(archivePath string, archiveID int64) (string,
 	return staged, false, nil
 }
 
+// openTaskArchiveSource refuses a substituted inode and cannot follow a symlink
+// outside the payload even if an agent swaps a path between Lstat and Open.
+// os.Root confines the actual open, not merely a preflight path check.
+func openTaskArchiveSource(root *os.Root, relative string, expected fs.FileInfo) (*os.File, fs.FileInfo, error) {
+	input, err := root.Open(relative)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := input.Stat()
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(expected, info) {
+		_ = input.Close()
+		return nil, nil, fmt.Errorf("task archive source changed or is not regular: %q", relative)
+	}
+	return input, info, nil
+}
+
 func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchiveSnapshot) (originalSize, compressedSize int64, checksum string, err error) {
 	if snapshot == nil {
 		return 0, 0, "", errors.New("nil task archive snapshot")
@@ -620,6 +636,15 @@ func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchive
 		return 0, 0, "", err
 	}
 	tarWriter := tar.NewWriter(encoder)
+	// Root.Open binds every file read to this payload directory. A path changed
+	// into a symlink after WalkDir/Lstat cannot redirect a privileged read outside it.
+	payloadRoot, err := os.OpenRoot(payloadDir)
+	if err != nil {
+		_ = tarWriter.Close()
+		_ = encoder.Close()
+		return 0, 0, "", err
+	}
+	defer payloadRoot.Close()
 	walkErr := filepath.WalkDir(payloadDir, func(current string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -628,7 +653,7 @@ func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchive
 		if err != nil || relative == "." {
 			return err
 		}
-		info, err := entry.Info()
+		info, err := payloadRoot.Lstat(relative)
 		if err != nil {
 			return err
 		}
@@ -639,23 +664,33 @@ func writeTaskArchivePackage(path, payloadDir string, snapshot *pgdb.TaskArchive
 			log.Printf("[task-archive] skipping symlink (unsupported by the archive, other files unaffected): %s", current)
 			return nil
 		}
-		header, err := tar.FileInfoHeader(info, "")
+		if info.IsDir() {
+			header, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			header.Name = filepath.ToSlash(relative)
+			return tarWriter.WriteHeader(header)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("unsupported task archive input type at %q", relative)
+		}
+		input, openedInfo, err := openTaskArchiveSource(payloadRoot, relative, info)
 		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(openedInfo, "")
+		if err != nil {
+			_ = input.Close()
 			return err
 		}
 		header.Name = filepath.ToSlash(relative)
 		if err := tarWriter.WriteHeader(header); err != nil {
+			_ = input.Close()
 			return err
 		}
-		if entry.IsDir() {
-			return nil
-		}
-		originalSize += info.Size()
-		input, err := os.Open(current)
-		if err != nil {
-			return err
-		}
-		_, copyErr := io.Copy(tarWriter, input)
+		originalSize += openedInfo.Size()
+		_, copyErr := io.CopyN(tarWriter, input, openedInfo.Size())
 		closeErr := input.Close()
 		return errors.Join(copyErr, closeErr)
 	})
