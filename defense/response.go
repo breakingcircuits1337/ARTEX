@@ -57,7 +57,7 @@ type Playbook struct {
 var playbooks = []Playbook{
 	{
 		ID: "review_network_block", Name: "Review a proposed network block",
-		Risk: "high",
+		Risk:        "high",
 		Explanation: "A firewall change may interrupt production traffic, especially on OT or control networks. This workflow is advisory only.",
 		Steps: []string{
 			"Verify incident evidence, network ownership, and exact source/destination scope.",
@@ -68,7 +68,7 @@ var playbooks = []Playbook{
 	},
 	{
 		ID: "review_identity_controls", Name: "Review identity containment",
-		Risk: "high",
+		Risk:        "high",
 		Explanation: "Account disablement and credential resets may disrupt legitimate access. This workflow cannot alter an identity provider.",
 		Steps: []string{
 			"Correlate authentication signals against the identity provider's authoritative logs.",
@@ -79,7 +79,7 @@ var playbooks = []Playbook{
 	},
 	{
 		ID: "review_endpoint_isolation", Name: "Review endpoint isolation",
-		Risk: "critical",
+		Risk:        "critical",
 		Explanation: "Isolating industrial, medical, or critical infrastructure endpoints can cause unacceptable availability or safety impacts. This workflow cannot call an EDR.",
 		Steps: []string{
 			"Confirm host identity, asset criticality, detection evidence, and whether the endpoint is OT/safety-critical.",
@@ -90,7 +90,7 @@ var playbooks = []Playbook{
 	},
 	{
 		ID: "collect_additional_evidence", Name: "Review and collect additional evidence",
-		Risk: "low",
+		Risk:        "low",
 		Explanation: "A passive investigation plan; it never starts a remote collection job.",
 		Steps: []string{
 			"Review the linked alert, source event identifier, and any matched assets.",

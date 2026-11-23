@@ -3,24 +3,28 @@
 package defense
 
 import (
- "fmt"
- "os"
- "strings"
+	"fmt"
+	"os"
+	"strings"
 )
 
 // Mode retains the original application behavior unless defense is selected.
 func Mode() string {
- m := strings.ToLower(strings.TrimSpace(os.Getenv("ARTEX_MODE")))
- if m == "" { return "pentest" }
- return m
+	m := strings.ToLower(strings.TrimSpace(os.Getenv("ARTEX_MODE")))
+	if m == "" {
+		return "pentest"
+	}
+	return m
 }
 
 // Validate refuses unexpected modes before any listener starts.
 func Validate() error {
- switch Mode() {
- case "pentest", "defense": return nil
- default: return fmt.Errorf("invalid ARTEX_MODE %q (expected pentest or defense)", Mode())
- }
+	switch Mode() {
+	case "pentest", "defense":
+		return nil
+	default:
+		return fmt.Errorf("invalid ARTEX_MODE %q (expected pentest or defense)", Mode())
+	}
 }
 
 // Restricted fails closed even if an embedding application omits Validate.
@@ -30,23 +34,23 @@ func Restricted() bool { return Mode() != "pentest" }
 // scope widening, credential retrieval, extensions, MCP, or active scanners.
 // Unknown tools remain blocked even if dynamically registered or renamed.
 var allowedTools = map[string]struct{}{
- "Read": {}, "LS": {}, "Glob": {}, "Grep": {},
- "TodoRead": {}, "TodoWrite": {},
- "graph_overview": {}, "list_assets": {}, "list_companies": {},
- "assess_exposure": {},
- "list_findings": {}, "list_facts": {}, "node_detail": {},
- "expand_digest": {}, "get_worker_output": {}, "get_worker_trace": {},
- "search_all_worker_traces": {}, "list_worker_traces": {},
- "list_goals": {}, "list_untested_assets": {},
- "add_intent": {}, "prove_goal": {}, "record_fact": {},
- "report_finding": {}, "record_coverage": {}, "add_hint": {},
- "set_goals": {}, "set_constraints": {},
+	"Read": {}, "LS": {}, "Glob": {}, "Grep": {},
+	"TodoRead": {}, "TodoWrite": {},
+	"graph_overview": {}, "list_assets": {}, "list_companies": {},
+	"assess_exposure": {},
+	"list_findings":   {}, "list_facts": {}, "node_detail": {},
+	"expand_digest": {}, "get_worker_output": {}, "get_worker_trace": {},
+	"search_all_worker_traces": {}, "list_worker_traces": {},
+	"list_goals": {}, "list_untested_assets": {},
+	"add_intent": {}, "prove_goal": {}, "record_fact": {},
+	"report_finding": {}, "record_coverage": {}, "add_hint": {},
+	"set_goals": {}, "set_constraints": {},
 }
 
 // ToolAllowed is non-overridable by user rules or editable agent prompts.
 func ToolAllowed(name string) bool {
- _, ok := allowedTools[name]
- return ok
+	_, ok := allowedTools[name]
+	return ok
 }
 
 // Instructions supplement—not replace—the enforced runtime permissions.

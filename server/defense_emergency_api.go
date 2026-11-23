@@ -56,15 +56,15 @@ func (s *Server) emergencyStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"mode": cfg.Mode, "armed": !paused && policyHash == cfg.Fingerprint() &&
 			cfg.Mode != defense.EmergencyOff && ready,
-		"paused": paused || policyHash != cfg.Fingerprint(),
-		"requires_rearm": policyHash != cfg.Fingerprint(),
-		"backend_ready": ready,
+		"paused":          paused || policyHash != cfg.Fingerprint(),
+		"requires_rearm":  policyHash != cfg.Fingerprint(),
+		"backend_ready":   ready,
 		"protected_cidrs": len(cfg.Protected), "ttl_seconds": int(cfg.TTL.Seconds()),
 		"max_active": cfg.MaxActive, "max_per_hour": cfg.MaxPerHour,
 		"active": active, "action_count": total,
-		"description": EmergencyBackendDescription(cfg.Mode, ready),
+		"description":  EmergencyBackendDescription(cfg.Mode, ready),
 		"live_effects": cfg.Mode == defense.EmergencyNFT,
-		"warning": "Only exact-source IPv4 blocks can be reversed. Previously dropped packets or interrupted sessions cannot be restored.",
+		"warning":      "Only exact-source IPv4 blocks can be reversed. Previously dropped packets or interrupted sessions cannot be restored.",
 	})
 }
 
@@ -143,7 +143,7 @@ func (s *Server) emergencyPause(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"paused": true,
-		"note": "New actions blocked. Existing kernel entries still require one-click undo or TTL expiration.",
+		"note":   "New actions blocked. Existing kernel entries still require one-click undo or TTL expiration.",
 	})
 }
 

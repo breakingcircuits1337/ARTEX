@@ -13,8 +13,8 @@ import (
 
 type fakeNft struct {
 	applied, reversed int
-	source string
-	ttl time.Duration
+	source            string
+	ttl               time.Duration
 }
 
 func (f *fakeNft) Check(context.Context) error { return nil }

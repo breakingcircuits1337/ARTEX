@@ -19,8 +19,8 @@ import (
 
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/config"
-	"github.com/Autumn-27/artex/defense"
 	pgdb "github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/defense"
 	"github.com/Autumn-27/artex/egress"
 	"github.com/Autumn-27/artex/enrich"
 	"github.com/Autumn-27/artex/guard"

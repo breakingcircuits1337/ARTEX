@@ -21,7 +21,9 @@ func TestDefenseWorkflowStrictJSON(t *testing.T) {
 	} {
 		request := httptest.NewRequest(http.MethodPost, "/api/defense/responses/1/decision", strings.NewReader(raw))
 		rec := httptest.NewRecorder()
-		input = struct{ Reason string `json:"reason"` }{}
+		input = struct {
+			Reason string `json:"reason"`
+		}{}
 		if decodeDefenseWorkflow(rec, request, &input) {
 			t.Errorf("accepted invalid workflow body %q", raw[:min(len(raw), 70)])
 		}

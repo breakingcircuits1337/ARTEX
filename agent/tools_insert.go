@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"github.com/Autumn-27/artex/defense"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Autumn-27/artex/defense"
 	"log"
 	"net"
 	"net/url"
@@ -630,24 +630,38 @@ func (t *ToolSet) assessExposure() actool.CoreTool {
 	return readTool("assess_exposure",
 		"Read-only defensive exposure triage of existing authorized asset IDs. This does not test reachability or prove a vulnerability. Pass 1..50 asset IDs obtained from list_assets.",
 		obj(map[string]any{
-			"ids": map[string]any{"type":"array","items":map[string]any{"type":"integer"},"description":"Existing in-scope asset IDs (1..50); never a network target"},
+			"ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Existing in-scope asset IDs (1..50); never a network target"},
 		}, "ids"),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
-			if t.as == nil { return actool.Errorf("asset inventory is unavailable"), nil }
-			if t.taskID <= 0 { return actool.Errorf("assess_exposure requires a task-scoped context"), nil }
-			var args struct { IDs []int64 `json:"ids"` }
-			if err := json.Unmarshal(in, &args); err != nil { return actool.Errorf("invalid asset IDs"), nil }
-			if len(args.IDs) == 0 || len(args.IDs) > 50 { return actool.Errorf("provide 1..50 asset IDs"), nil }
+			if t.as == nil {
+				return actool.Errorf("asset inventory is unavailable"), nil
+			}
+			if t.taskID <= 0 {
+				return actool.Errorf("assess_exposure requires a task-scoped context"), nil
+			}
+			var args struct {
+				IDs []int64 `json:"ids"`
+			}
+			if err := json.Unmarshal(in, &args); err != nil {
+				return actool.Errorf("invalid asset IDs"), nil
+			}
+			if len(args.IDs) == 0 || len(args.IDs) > 50 {
+				return actool.Errorf("provide 1..50 asset IDs"), nil
+			}
 			for _, id := range args.IDs {
-				if id <= 0 { return actool.Errorf("asset IDs must be positive"), nil }
+				if id <= 0 {
+					return actool.Errorf("asset IDs must be positive"), nil
+				}
 			}
 			assets, err := t.as.GetByIDsInScope(t.taskID, args.IDs)
-			if err != nil { return actool.Errorf("failed to read scoped assets: " + err.Error()), nil }
+			if err != nil {
+				return actool.Errorf("failed to read scoped assets: " + err.Error()), nil
+			}
 			return jsonResult(map[string]any{
-				"scope": "authorized inventory only",
-				"proof": "metadata-only; not confirmation of reachability or exploitability",
+				"scope":          "authorized inventory only",
+				"proof":          "metadata-only; not confirmation of reachability or exploitability",
 				"reviewed_count": len(assets),
-				"assessments": defense.AssessAssets(assets),
+				"assessments":    defense.AssessAssets(assets),
 			})
 		})
 }
