@@ -42,7 +42,10 @@ All automatic responses require **both**:
   CIDR allowlist**. Private, reserved, internal and operator-exempt source
   ranges are never blocked.
 - The operator must set a non-off mode **and click ARM** in the SOC dashboard.
-  ARM is persisted; PAUSE stops new admissions. The first startup is paused.
+  ARM is persisted; PAUSE stops new admissions. The first startup is paused. ARM is cryptographically
+bound to the exact mode, protected/exempt networks, allowed Suricata signatures,
+timeout, budgets and Unix socket path. **Changing any of them requires a fresh
+operator ARM**; switching from simulation to live cannot inherit approval.
 
 Only the following vendor-source rules may trigger. **An empty
 `ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES` allowlist disables automatic IDS
