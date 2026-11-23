@@ -20,7 +20,7 @@ func TestNormalizeSuricataAndDedupKey(t *testing.T){
 func TestNormalizeWazuhAndGeneric(t *testing.T){
  now:=time.Now()
  a,err:=NormalizeEvent("wazuh",json.RawMessage(`{"id":"abc-1","rule":{"level":12,"description":"Suspicious login","groups":["authentication_failed"]},"agent":{"name":"host.local"},"data":{"srcip":"192.0.2.10","srcuser":"operator"},"timestamp":"2026-11-22T12:00:00Z"}`),now)
- if err!=nil||!a.VendorAlert||a.Kind!="authentication"||a.Host!="host.local"{t.Fatalf("%+v err=%v",a,err)}
+ if err!=nil||!a.VendorAlert||a.Kind!="authentication"||a.Outcome!="failure"||a.Host!="host.local"{t.Fatalf("%+v err=%v",a,err)}
  b,err:=NormalizeEvent("generic",json.RawMessage(`{"event_id":"evt-7","kind":"authentication","outcome":"failure","src_ip":"192.0.2.11","username":"someone"}`),now)
  if err!=nil||b.Outcome!="failure"||len(EvaluateEvent(b))!=0{t.Fatalf("%+v err=%v",b,err)}
 }
