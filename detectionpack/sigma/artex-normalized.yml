@@ -1,0 +1,108 @@
+# ARTEX-DEFENSE PR #12: local, reviewed Sigma-compatible normalized-event subset.
+# These rules are NOT full Sigma support: one selection, exact matches or
+# |contains/|startswith on normalized fields only. Alert-only; no sensor deploy.
+title: Reported Security Agent Disablement
+id: 9ab1e612-46ba-40bd-91d5-31d4ee36f001
+status: experimental
+description: >
+  An enrolled sensor reports a security-agent stop or disable action; validate
+  administrative change records and corroborate independently.
+logsource:
+  category: artex_normalized
+  product: artex-defense
+detection:
+  selection:
+    kind: endpoint
+    action:
+      - security_agent_disabled
+      - edr_service_stopped
+  condition: selection
+level: medium
+falsepositives:
+  - Authorized upgrades, maintenance, and test deployments.
+tags:
+  - attack.t1685
+  - attack.ta0112
+x_artex:
+  disposition: alert_only
+  false_positive_risk: high
+  limitations: A normalized action label does not independently prove tool tampering.
+  auto_containment_eligible: false
+---
+title: Reported Encoded PowerShell Invocation
+id: 8f70ef12-a5e9-439d-a173-4d8546932002
+status: experimental
+description: >
+  An enrolled endpoint reports encoded PowerShell command execution;
+  review approved administration and validate process telemetry.
+logsource:
+  category: artex_normalized
+  product: artex-defense
+detection:
+  selection:
+    kind: endpoint
+    action: powershell_encoded_command
+  condition: selection
+level: medium
+falsepositives:
+  - Authorized automation and scripted management tools.
+tags:
+  - attack.t1059.001
+  - attack.ta0002
+x_artex:
+  disposition: alert_only
+  false_positive_risk: medium
+  limitations: Encoded PowerShell is common in benign enterprise administration.
+  auto_containment_eligible: false
+---
+title: Sensor-Reported DNS Tunnel Heuristic
+id: 7c89f13b-7497-4cc7-ae91-d8ca910da003
+status: experimental
+description: >
+  A network sensor has classified traffic as possible DNS tunneling.
+  Requires original packet or DNS telemetry and independent context.
+logsource:
+  category: artex_normalized
+  product: artex-defense
+detection:
+  selection:
+    kind: network
+    action: dns_tunnel_suspected
+  condition: selection
+level: medium
+falsepositives:
+  - DNS security products, monitoring, and legitimate encoded DNS traffic.
+tags:
+  - attack.t1071.004
+  - attack.ta0011
+x_artex:
+  disposition: alert_only
+  false_positive_risk: high
+  limitations: A vendor-generated heuristic alone is not command-and-control attribution.
+  auto_containment_eligible: false
+---
+title: Reported Credential Dumping Heuristic
+id: 41a367b9-f14d-4d30-96de-d28601f78004
+status: experimental
+description: >
+  An enrolled endpoint sensor reports an action consistent with credential
+  dumping; confirm process attribution and authorized forensic workflows.
+logsource:
+  category: artex_normalized
+  product: artex-defense
+detection:
+  selection:
+    kind: endpoint
+    action: credential_dump_reported
+  condition: selection
+level: medium
+falsepositives:
+  - Authorized forensic acquisition and security validation tools.
+tags:
+  - attack.t1003
+  - attack.ta0006
+x_artex:
+  disposition: alert_only
+  false_positive_risk: high
+  limitations: A vendor report is an unverified behavioral clue, not proof of stolen credentials.
+  auto_containment_eligible: false
