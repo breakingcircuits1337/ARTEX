@@ -8,11 +8,12 @@ import (
 	"strings"
 )
 
-// Mode retains the original application behavior unless defense is selected.
+// Mode fails safely into defense mode unless active testing is explicitly selected.
+// This applies to the direct binary as well as Compose, installers and embedded callers.
 func Mode() string {
 	m := strings.ToLower(strings.TrimSpace(os.Getenv("ARTEX_MODE")))
 	if m == "" {
-		return "pentest"
+		return "defense"
 	}
 	return m
 }

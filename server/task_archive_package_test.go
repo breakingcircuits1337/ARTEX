@@ -274,3 +274,84 @@ func TestTaskArchivePackageRejectsTraversal(t *testing.T) {
 		t.Fatalf("traversal wrote outside destination: %v", err)
 	}
 }
+
+// A writable task workspace must not trick the privileged archiver into
+// following a substituted symlink to an unrelated root-only file.
+func TestTaskArchiveSourceRefusesSymlinkSwap(t *testing.T) {
+	payload := t.TempDir()
+	rel := filepath.Join("files", "tasks", "42", "evidence.txt")
+	source := filepath.Join(payload, rel)
+	if err := os.MkdirAll(filepath.Dir(source), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("must-not-package"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, source); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if f, _, err := openTaskArchiveSource(root, rel, before); err == nil {
+		f.Close()
+		t.Fatal("archive source followed substituted external symlink")
+	}
+	// Check normal, unmodified reads are still accepted.
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("normal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _, err := openTaskArchiveSource(root, rel, current)
+	if err != nil {
+		t.Fatalf("confined regular file should open: %v", err)
+	}
+	f.Close()
+}
+
+func TestTaskArchivePackageSkipsExternalSymlinks(t *testing.T) {
+	base := t.TempDir()
+	payload := filepath.Join(base, "payload")
+	if err := os.MkdirAll(filepath.Join(payload, "files", "tasks"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(base, "outside-secret")
+	if err := os.WriteFile(outside, []byte("never include"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(payload, "files", "tasks", "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	pkg := filepath.Join(base, "archive.tar.zst")
+	_, _, sum, err := writeTaskArchivePackage(pkg, payload, &pgdb.TaskArchiveSnapshot{FormatVersion: pgdb.TaskArchiveFormatVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(base, "extracted")
+	if err := extractTaskArchivePackage(pkg, sum, dest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(dest, "files", "tasks", "escape")); !os.IsNotExist(err) {
+		t.Fatalf("external symlink included in archive: %v", err)
+	}
+}

@@ -9,6 +9,8 @@ check() {
   fi
 }
 check .env.example 'ARTEX_MODE=defense'
+# Direct binary and embedded callers must also default to restricted defense.
+check defense/policy.go 'return "defense"'
 check .env.example 'ARTEX_AUTO_CONTAIN_MODE=off'
 check .env.example 'POSTGRES_PASSWORD='
 if grep -Eq '^POSTGRES_PASSWORD=[^#[:space:]]+' .env.example; then

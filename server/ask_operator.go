@@ -238,6 +238,41 @@ var askOperatorStageName = func(ext string) string {
 	return fmt.Sprintf("ask-operator-%d-%x%s", time.Now().UnixNano(), b, ext)
 }
 
+// openAskOperatorRunImage confines the actual root-privileged read to the
+// run directory. Unlike EvalSymlinks+os.Open, changing any component to an
+// external symlink between the checks and the open cannot escape os.Root.
+func openAskOperatorRunImage(runDir, src string) (*os.File, os.FileInfo, error) {
+	if !askOperatorImageExt[strings.ToLower(filepath.Ext(src))] {
+		return nil, nil, fmt.Errorf("image_path must be a png/jpg/jpeg/webp/gif file")
+	}
+	relative := src
+	if filepath.IsAbs(relative) {
+		var err error
+		relative, err = filepath.Rel(runDir, relative)
+		if err != nil {
+			return nil, nil, fmt.Errorf("image_path must stay inside the run directory")
+		}
+	}
+	if !filepath.IsLocal(relative) {
+		return nil, nil, fmt.Errorf("image_path must stay inside the run directory")
+	}
+	root, err := os.OpenRoot(runDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("image not readable")
+	}
+	defer root.Close()
+	in, err := root.Open(relative)
+	if err != nil {
+		return nil, nil, fmt.Errorf("image not readable")
+	}
+	info, err := in.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		_ = in.Close()
+		return nil, nil, fmt.Errorf("image_path must be a regular file")
+	}
+	return in, info, nil
+}
+
 // stageAskOperatorImage copies the referenced image into the task's uploads dir
 // (tasks/<id>/uploads, where the transcript attachment card resolves) and returns
 // the attachment descriptor. The image is read from the run directory of the agent
@@ -250,15 +285,8 @@ func stageAskOperatorImage(dataDir string, taskID, intentID int64, src string) (
 		return nil, nil
 	}
 	taskDir := filepath.Join(dataDir, "tasks", strconv.FormatInt(taskID, 10))
-	resolved, err := resolveAskOperatorImage(agent.EnsureRunDir(dataDir, taskID, intentID), src)
-	if err != nil {
-		return nil, err
-	}
-	st, err := os.Lstat(resolved)
-	if err != nil {
-		return nil, fmt.Errorf("image not readable")
-	}
-	in, err := openAskOperatorImage(resolved, st)
+	runDir := agent.EnsureRunDir(dataDir, taskID, intentID)
+	in, st, err := openAskOperatorRunImage(runDir, src)
 	if err != nil {
 		return nil, err
 	}
@@ -266,16 +294,21 @@ func stageAskOperatorImage(dataDir string, taskID, intentID int64, src string) (
 	if st.Size() > askOperatorMaxImage {
 		return nil, fmt.Errorf("image too large (%s, max 10MB)", humanBytes(st.Size()))
 	}
-	dir, err := askOperatorUploadsDir(taskDir)
+	_, err = askOperatorUploadsDir(taskDir)
 	if err != nil {
 		return nil, err
 	}
-	ext := strings.ToLower(filepath.Ext(resolved))
+	taskRoot, err := os.OpenRoot(taskDir)
+	if err != nil {
+		return nil, err
+	}
+	defer taskRoot.Close()
+	ext := strings.ToLower(filepath.Ext(src))
 	var name string
 	var out *os.File
 	for try := 1; ; try++ {
 		name = askOperatorStageName(ext)
-		out, err = os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640)
+		out, err = taskRoot.OpenFile(filepath.Join("uploads", name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640)
 		if err == nil {
 			break
 		}
@@ -284,7 +317,8 @@ func stageAskOperatorImage(dataDir string, taskID, intentID int64, src string) (
 		}
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
+	// A file growing after the metadata check cannot bypass the image-size cap.
+	if _, err := io.CopyN(out, in, st.Size()); err != nil {
 		return nil, err
 	}
 	return []chatAttachment{{Name: name, Path: "uploads/" + name, Size: st.Size()}}, nil

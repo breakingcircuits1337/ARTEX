@@ -7,7 +7,7 @@ func TestModeValidation(t *testing.T) {
 		value, mode         string
 		restricted, invalid bool
 	}{
-		{"", "pentest", false, false},
+		{"", "defense", true, false},
 		{"pentest", "pentest", false, false},
 		{"DEFENSE", "defense", true, false},
 		{" typo ", "typo", true, true},

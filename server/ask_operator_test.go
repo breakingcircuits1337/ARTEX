@@ -411,3 +411,32 @@ func TestAskOperatorEnvHandoffGuidance(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAskOperatorRunImageConfinedAtOpen(t *testing.T) {
+	runDir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.png")
+	if err := os.WriteFile(outside, []byte("unrelated file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(runDir, "switch.png")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if f, _, err := openAskOperatorRunImage(runDir, "switch.png"); err == nil {
+		f.Close()
+		t.Fatal("external symlink was followed")
+	}
+	// Internal links may be followed, but only while they stay in this root.
+	normal := filepath.Join(runDir, "normal.png")
+	if err := os.WriteFile(normal, []byte("valid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, info, err := openAskOperatorRunImage(runDir, "normal.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != 5 {
+		t.Fatalf("opened unexpected image size: %d", info.Size())
+	}
+	f.Close()
+}

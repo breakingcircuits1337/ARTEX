@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -93,7 +95,20 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		base = agent.EnsureSessionDir(s.m.dir, id)
 	}
 	dir := filepath.Join(base, "uploads")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// Anchor directory creation and all subsequent file opens to the same
+	// trusted data root, not just the final upload filename.
+	dataRoot, err := os.OpenRoot(s.m.dir)
+	if err != nil {
+		writeErr(w, 500, "failed to open upload storage")
+		return
+	}
+	defer dataRoot.Close()
+	dirRel, err := filepath.Rel(s.m.dir, dir)
+	if err != nil || !filepath.IsLocal(dirRel) {
+		writeErr(w, 400, "invalid upload directory")
+		return
+	}
+	if err := dataRoot.MkdirAll(dirRel, 0o755); err != nil {
 		writeErr(w, 500, "failed to create directory: "+err.Error())
 		return
 	}
@@ -132,7 +147,12 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 500, "Save failed: "+err.Error())
 			return
 		}
-		if err := saveUpload(hdr, dest); err != nil {
+		rel, err := filepath.Rel(s.m.dir, dest)
+		if err != nil || !filepath.IsLocal(rel) {
+			writeErr(w, 400, "invalid upload destination")
+			return
+		}
+		if err := saveChatUploadConfined(hdr, dataRoot, rel); err != nil {
 			writeErr(w, 500, "Save failed: "+err.Error())
 			return
 		}
@@ -140,6 +160,27 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		out = append(out, chatAttachment{Name: base, Path: "uploads/" + base, Size: hdr.Size, Abs: dest})
 	}
 	writeJSON(w, 200, map[string]any{"attachments": out})
+}
+
+// saveChatUploadConfined uses an exclusive descriptor-relative open. os.Root
+// refuses symlinks that escape the data directory, including parent swaps
+// between the name availability check and the actual file creation.
+func saveChatUploadConfined(hdr *multipart.FileHeader, root *os.Root, relative string) error {
+	if !filepath.IsLocal(relative) {
+		return fmt.Errorf("upload destination is outside data root")
+	}
+	input, err := hdr.Open()
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	output, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	_, err = io.Copy(output, input)
+	return err
 }
 
 // uniqueUploadPath returns dir/name, or dir/name-1, dir/name-2… when it already exists,
