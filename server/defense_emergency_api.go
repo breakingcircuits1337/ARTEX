@@ -45,7 +45,7 @@ func (s *Server) emergencyStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	var active, total int64
 	if err := pg.QueryRowContext(r.Context(), `
-		SELECT COUNT(*) FILTER (WHERE status IN ('pending','active')),
+		SELECT COUNT(*) FILTER (WHERE status IN ('pending','active','failed')),
 		       COUNT(*) FROM defense_emergency_actions`).Scan(&active, &total); err != nil {
 		writeErr(w, 503, "emergency ledger unavailable")
 		return
