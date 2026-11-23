@@ -85,9 +85,9 @@ func appendCorrelationGraph(
 		addNode(defenseGraphNode{ID: key, Kind: "observed_indicator",
 			Label: kind + ": " + value,
 			Metadata: map[string]any{
-				"indicator_type": kind,
+				"indicator_type":     kind,
 				"linkage_confidence": confidence,
-				"first_seen": first, "last_seen": last,
+				"first_seen":         first, "last_seen": last,
 				"verified_malicious": false,
 			},
 		})
@@ -115,8 +115,8 @@ func appendCorrelationGraph(
 			return err
 		}
 		*edges = append(*edges, defenseGraphEdge{
-			Source: fmt.Sprintf("event:%d", eventID),
-			Target: fmt.Sprintf("indicator:%d", indicatorID),
+			Source:   fmt.Sprintf("event:%d", eventID),
+			Target:   fmt.Sprintf("indicator:%d", indicatorID),
 			Relation: "observed_" + role,
 		})
 	}
@@ -139,8 +139,8 @@ func appendCorrelationGraph(
 			return err
 		}
 		*edges = append(*edges, defenseGraphEdge{
-			Source: fmt.Sprintf("indicator:%d", sourceID),
-			Target: fmt.Sprintf("indicator:%d", targetID),
+			Source:   fmt.Sprintf("indicator:%d", sourceID),
+			Target:   fmt.Sprintf("indicator:%d", targetID),
 			Relation: fmt.Sprintf("co_observed_event_%d", evidenceID),
 		})
 	}
@@ -171,10 +171,10 @@ func appendCorrelationGraph(
 		addNode(defenseGraphNode{ID: key, Kind: "attack_hypothesis",
 			Label: technique + " / " + tactic, Metadata: map[string]any{
 				"mapping_source": source,
-				"confidence": confidence,
-				"rationale": rationale,
-				"mapped_at": mapped,
-				"confirmed": false,
+				"confidence":     confidence,
+				"rationale":      rationale,
+				"mapped_at":      mapped,
+				"confirmed":      false,
 			},
 		})
 		*edges = append(*edges, defenseGraphEdge{

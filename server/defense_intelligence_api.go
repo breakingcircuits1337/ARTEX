@@ -149,7 +149,7 @@ func (s *Server) mapDefenseTechnique(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{
 		"id": mappingID, "case_id": id, "created": created,
-		"mapping_source": "analyst_hypothesis",
+		"mapping_source":      "analyst_hypothesis",
 		"verified_compromise": false, "execution": false,
 	})
 }

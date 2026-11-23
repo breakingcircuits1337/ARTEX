@@ -14,7 +14,7 @@ import (
 // path. It operates only on already-ingested rows and cannot call an agent,
 // a scanner, DNS, shell, nftables or an external response connector.
 const (
-	caseCorrelationLimit = 50
+	caseCorrelationLimit  = 50
 	caseCorrelationWindow = 15 * time.Minute
 )
 
