@@ -29,7 +29,7 @@ func (s *Server) stageEmergencyAction(
 	}
 	possibleIDS := event.Source == "suricata" && event.Kind == "network" &&
 		event.Action == "alert" && event.VendorAlert && event.Severity >= 9 &&
-		event.Signature != ""
+		cfg.TrustedSignature(event.Signature)
 	possibleSpray := event.Source == "wazuh" && event.Kind == "authentication" &&
 		event.Outcome == "failure" && event.Username != ""
 	if !possibleIDS && !possibleSpray {
