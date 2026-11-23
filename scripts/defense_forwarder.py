@@ -72,6 +72,7 @@ def iter_records(path: pathlib.Path, follow: bool):
                 if not follow:
                     return
                 time.sleep(1)
+                yield None  # idle tick lets the forwarder flush partial batches
                 continue
             if len(line.encode("utf-8")) > MAX_LINE:
                 raise ValueError("log line exceeds 128 KiB; refusing to forward")
@@ -103,12 +104,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         endpoint = validate_endpoint(opts.url)
         pending: list[dict] = []
+        last_flush = time.monotonic()
         for item in iter_records(opts.file, opts.follow):
-            pending.append(item)
-            if len(pending) >= opts.batch_size:
+            if item is not None:
+                pending.append(item)
+            if pending and (len(pending) >= opts.batch_size or time.monotonic() - last_flush >= 5):
                 result = send_batch(endpoint, token, opts.source, pending)
                 print(f"Accepted={result.get('ingested', 0)} duplicates={result.get('duplicates', 0)}")
                 pending.clear()
+                last_flush = time.monotonic()
         if pending:
             result = send_batch(endpoint, token, opts.source, pending)
             print(f"Accepted={result.get('ingested', 0)} duplicates={result.get('duplicates', 0)}")
