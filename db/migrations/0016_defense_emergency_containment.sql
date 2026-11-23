@@ -38,6 +38,16 @@ CREATE INDEX IF NOT EXISTS idx_defense_emergency_expiry
     ON defense_emergency_actions(expires_at)
     WHERE status IN ('pending','active');
 
+-- Keep the deterministic high-confidence counting queries bounded on busy
+-- collectors. These are partial indexes on normalised source observations.
+CREATE INDEX IF NOT EXISTS idx_defense_critical_suricata
+    ON defense_events(src_ip,dst_ip,signature,observed_at DESC)
+    WHERE source='suricata' AND kind='network' AND action='alert'
+      AND vendor_alert AND severity>=9;
+CREATE INDEX IF NOT EXISTS idx_defense_wazuh_spray
+    ON defense_events(src_ip,dst_ip,observed_at DESC)
+    WHERE source='wazuh' AND kind='authentication' AND outcome='failure';
+
 -- Explicit operator undo prevents immediate automatic re-block of the same IP
 -- for 30 minutes; the pause button prevents new actions globally.
 CREATE TABLE IF NOT EXISTS defense_emergency_suppressions (
