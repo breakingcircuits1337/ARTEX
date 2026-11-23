@@ -40,7 +40,7 @@ func TestAIAdvisorySafetyEvaluationMatrix(t *testing.T){
     if _,err:=ParseAIAdvice(anchored,refs);err==nil{t.Fatal("anchor incorrectly accepted as corroborating event")}
     // The parser must not accept unknown categories or unsupported key names.
     for _,field:=range []string{"priority","tools","confirmed","response_action"}{
-        tampered:=strings.Replace(base,`"summary":`,fmt.Sprintf(`"%q":true,"summary":`,field),1)
+        tampered:=strings.Replace(base,`"summary":`,fmt.Sprintf(`%q:true,"summary":`,field),1)
         if _,err:=ParseAIAdvice(tampered,refs);err==nil{t.Errorf("unsupported field accepted: %s",field)}
     }
 }
