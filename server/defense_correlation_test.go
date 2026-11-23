@@ -253,4 +253,3 @@ func TestIntelligenceEndpointsRejectInvalidCaseID(t *testing.T) {
 		t.Fatalf("unexpected case-id gate response %d", w.Code)
 	}
 }
-
