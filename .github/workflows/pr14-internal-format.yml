@@ -1,0 +1,20 @@
+name: pr14-internal-format
+on:
+  push:
+    branches: [feat/pr14-ai-assisted-defensive-investigation]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Emit corrected source formatting
+        run: |
+          for f in defense/ai_advisory.go defense/ai_advisory_test.go server/defense_ai_advisory.go server/defense_ai_advisory_test.go server/server.go; do
+            cp "$f" /tmp/pr14-original.go
+            gofmt -w "$f"
+            if ! cmp -s /tmp/pr14-original.go "$f"; then
+              printf 'ARTEX14_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
+            fi
+          done
