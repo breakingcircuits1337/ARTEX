@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/public/logo.svg" width="84" alt="ARTEX logo" />
+<img src="docs/assets/artex-defense-banner.webp" width="100%" alt="ARTEX-DEFENSE — Breaking Circuits mechanical griffin and SOC capabilities: Detect, Investigate, Contain, Review, Recover" />
 
 # ARTEX
 
