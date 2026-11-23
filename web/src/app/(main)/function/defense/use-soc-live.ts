@@ -26,6 +26,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
     let active = false;
     let failures = 0;
     let signature = "";
+    let generation = 0;
     let controller: AbortController | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let initialWatchdog: ReturnType<typeof setTimeout> | undefined;
@@ -37,6 +38,7 @@ export function useSOCLive(onRevision: () => void): StreamState {
 
     async function connect() {
       if (stopped || document.hidden) return;
+      const myGeneration = ++generation;
       const connection = new AbortController();
       controller = connection;
       setState("connecting");
@@ -107,12 +109,12 @@ export function useSOCLive(onRevision: () => void): StreamState {
         // Polling is a durable fallback for buffering proxies, load limits,
         // server restart, and interrupted network connections.
       } finally {
-        active = false;
+        if (myGeneration === generation) active = false;
         if (initialWatchdog) window.clearTimeout(initialWatchdog);
         if (controller === connection) controller = null;
         connection.abort();
       }
-      if (!stopped && !document.hidden) {
+      if (!stopped && !document.hidden && myGeneration === generation) {
         failures += 1;
         setState("polling");
         retry = window.setTimeout(() => { void connect(); }, Math.min(16000, 1500 * 2 ** Math.min(failures, 4)));
@@ -120,14 +122,12 @@ export function useSOCLive(onRevision: () => void): StreamState {
     }
 
     function visibilityChanged() {
-      if (document.hidden) {
-        controller?.abort();
-        active = false;
-        return;
-      }
-      current.current();
+      generation += 1;
       if (retry) window.clearTimeout(retry);
       controller?.abort();
+      active = false;
+      if (document.hidden) return;
+      current.current();
       void connect();
     }
     document.addEventListener("visibilitychange", visibilityChanged);
