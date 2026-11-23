@@ -2,15 +2,13 @@ package server
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
-
 )
 
 func TestCorrelationReadRoutesRequireDefenseAndSession(t *testing.T) {
@@ -256,5 +254,3 @@ func TestIntelligenceEndpointsRejectInvalidCaseID(t *testing.T) {
 	}
 }
 
-// Compile-time check of the SQL transaction interface used by correlation.
-var _ *sql.Tx
