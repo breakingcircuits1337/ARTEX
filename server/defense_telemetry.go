@@ -238,6 +238,39 @@ func (s *Server) ingestDefenseEvents(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+        // Password guessing (distinct from spraying): >=8 failed attempts
+        // against the SAME account from one IP within 10 min, inside one
+        // collector and explicitly verified company. No cross-sensor counting
+        // or unscoped legacy accumulation; all results remain review-only.
+        if companyID.Valid && e.Kind=="authentication" && e.Outcome=="failure" &&
+            e.SrcIP!="" && e.Username!="" {
+            var attempts int
+            err=tx.QueryRowContext(ctx,`
+               SELECT count(*) FROM defense_events
+               WHERE kind='authentication' AND outcome='failure'
+                 AND src_ip=$1 AND lower(username)=lower($2)
+                 AND observed_at BETWEEN $3 AND $4
+                 AND collector_id IS NOT DISTINCT FROM $5::bigint
+                 AND company_id=$6
+            `,e.SrcIP,e.Username,e.ObservedAt.Add(-10*time.Minute),
+                e.ObservedAt,collectorID,companyID.Int64).Scan(&attempts)
+            if err!=nil{writeErr(w,503,"authentication correlation unavailable");return}
+            if attempts>=8 {
+                hit:=defense.RuleHit{
+                    RuleID:"auth_guess_burst_v1",
+                    Title:"Possible repeated password guessing",
+                    Severity:"medium",
+                    Summary:"At least eight failed authentications for one account from one source IP in ten minutes; review for lockouts, maintenance and benign errors.",
+                }
+                digest:=sha256.Sum256([]byte(strings.ToLower(e.Username)))
+                key:=fmt.Sprintf("guess:%s:%x",e.SrcIP,digest[:8])
+                if collector!=nil{key=fmt.Sprintf("collector:%d:%s",collector.ID,key)
+                }else{key=fmt.Sprintf("company:%d:%s",companyID.Int64,key)}
+                created,err:=insertDefenseAlertAt(ctx,tx,id,key,e.ObservedAt.Truncate(10*time.Minute),hit,assetJSON)
+                if err!=nil{writeErr(w,503,"authentication alert persistence failed");return}
+                if created{alertCount++}
+            }
+        }
 		// Machine-speed fast path: deterministic corroboration and admission are
 		// recorded in the same transaction as the source event. Never call the
 		// firewall before the event + audit record commits.
