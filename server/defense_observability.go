@@ -274,7 +274,12 @@ func (s *Server) readDefenseOps(ctx context.Context) (defenseOpsSnapshot, error)
 	case out.CollectorsActive == 0:
 		out.Status = "unknown"
 		out.Warnings = append(out.Warnings, "no_enrolled_active_collectors")
-	case out.EmergencyFailedLastHour > 0 || out.InvestigationsFailedLastHour > 0 || out.InvestigationsQueued >= 100:
+	case !out.CollectorSampleTruncated && out.CollectorNeverSeen == out.CollectorsActive:
+		// If all enrolled collectors are never observed, report unknown
+		// rather than inferring a healthy stream from database reachability.
+		out.Status = "unknown"
+	case out.EmergencyFailedLastHour > 0 || out.InvestigationsFailedLastHour > 0 ||
+		out.InvestigationsQueued >= 100 || out.CollectorsUnassigned > 0:
 		out.Status = "attention"
 	default:
 		out.Status = "ready"

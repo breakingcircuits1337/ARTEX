@@ -50,14 +50,16 @@ rather than broadly distributing an admin JWT.
 `operations.status` is one of:
 
 - `ready`: required SQL snapshot queries succeeded, at least one enrolled
-  active collector exists, and no configured operational warning threshold
-  (failed emergency/failed investigation/backlog >=100) was triggered.
+  collector exists and has previously reported telemetry, none is missing
+  a company binding, and no configured failure/backlog threshold was triggered.
   **Does NOT prove collectors are online or security controls are effective.**
-- `attention`: known failures within the last hour or >=100 queued
-  evidence-only investigations. Investigate the ledger. No automatic
-  containment is invoked or suppressed by this label.
+- `attention`: known failures within the last hour, >=100 queued
+  evidence-only investigations, or an unbound collector unable to ingest.
+  This status never invokes or suppresses automatic containment.
 - `unknown`: database queries worked but there are no active enrolled
-  collectors. An empty SOC can be intentional; this is not an outage verdict.
+  collectors, or all active collectors in a complete sample have **never**
+  reported an event. This is not a verified outage; idle sensors may be
+  working as intended.
 - HTTP **503**: a database dependency or snapshot query failed. No cached
   healthy state is returned after the short error-cache period; the
   dashboard clears its prior good state on request failures.
