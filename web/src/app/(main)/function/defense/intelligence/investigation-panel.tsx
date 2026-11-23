@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Activity, PauseCircle, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { http } from "@/lib/api";
+import { AIReviewPanel } from "./ai-review-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -142,7 +143,7 @@ export function InvestigationPanel({ caseID }: { caseID: number }) {
           Durable evidence-only jobs review case signals, Phase 6 correlations,
           asset context, ATT&CK hypotheses, and missing corroboration.
           Findings require a human verdict and cannot arm emergency containment.
-          This v1 investigator is deterministic and does not invoke an LLM.
+          Deterministic v1 remains independent of the opt-in AI advisory panel below.
         </p>
         {error && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{error}</p>}
         {message && <p role="status" className="rounded-md border p-3">{message}</p>}
@@ -239,6 +240,7 @@ export function InvestigationPanel({ caseID }: { caseID: number }) {
             </div>
           </>
         )}
+        <AIReviewPanel caseID={caseID} />
       </CardContent>
     </Card>
   );
