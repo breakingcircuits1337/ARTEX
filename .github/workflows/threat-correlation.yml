@@ -12,6 +12,7 @@ on:
       - "server/defense_graph.go"
       - "server/server.go"
       - "web/src/app/(main)/function/defense/cases/**"
+      - "web/src/app/(main)/function/defense/intelligence/**"
       - ".github/workflows/threat-correlation.yml"
   push:
     branches: [main]
