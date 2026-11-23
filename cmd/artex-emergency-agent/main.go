@@ -47,6 +47,14 @@ func run() error {
 	if !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
 		return errors.New("socket parent must be a directory without group/world write access")
 	}
+	owner, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != 0 {
+		return errors.New("socket directory must be owned by root")
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil || resolved != dir {
+		return errors.New("socket directory must not be a symlink")
+	}
 	// Never unlink a pre-existing socket or symlink. Require the operator to
 	// stop the prior helper and clean up its socket deliberately.
 	if _, err := os.Lstat(path); err == nil {
