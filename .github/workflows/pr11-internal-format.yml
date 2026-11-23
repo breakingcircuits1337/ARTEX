@@ -1,0 +1,20 @@
+name: pr11-format-review
+on:
+  push:
+    branches: [feat/pr11-cross-sensor-tenant-evidence]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render only changed gofmt outputs for review
+        run: |
+          for f in server/defense_collectors.go server/defense_collectors_test.go server/defense_correlation.go server/defense_tenant_correlation_test.go server/defense_telemetry.go server/defense_graph.go server/defense_graph_correlation.go server/defense_intelligence_api.go server/server.go; do
+            cp "$f" /tmp/pr11-original.go
+            gofmt -w "$f"
+            if ! cmp -s /tmp/pr11-original.go "$f"; then
+              printf 'ARTEX11_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
+            fi
+          done
