@@ -95,7 +95,20 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		base = agent.EnsureSessionDir(s.m.dir, id)
 	}
 	dir := filepath.Join(base, "uploads")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// Anchor directory creation and all subsequent file opens to the same
+	// trusted data root, not just the final upload filename.
+	dataRoot, err := os.OpenRoot(s.m.dir)
+	if err != nil {
+		writeErr(w, 500, "failed to open upload storage")
+		return
+	}
+	defer dataRoot.Close()
+	dirRel, err := filepath.Rel(s.m.dir, dir)
+	if err != nil || !filepath.IsLocal(dirRel) {
+		writeErr(w, 400, "invalid upload directory")
+		return
+	}
+	if err := dataRoot.MkdirAll(dirRel, 0o755); err != nil {
 		writeErr(w, 500, "failed to create directory: "+err.Error())
 		return
 	}
@@ -110,14 +123,6 @@ func (s *Server) chatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	// Root every destination open at the operator's data directory. A writable
-	// uploads/ directory swapped for a symlink cannot redirect writes outside it.
-	dataRoot, err := os.OpenRoot(s.m.dir)
-	if err != nil {
-		writeErr(w, 500, "failed to open upload storage")
-		return
-	}
-	defer dataRoot.Close()
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
 		writeErr(w, 400, "missing upload file (form field file)")
