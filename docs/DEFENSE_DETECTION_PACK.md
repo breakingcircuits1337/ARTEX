@@ -169,7 +169,9 @@ before acting on a submitted scan result.
 
 ## Relationship with Emergency Auto-Containment PR #4
 
-PR #5 targets **main** independently of still-draft PR #4. It does not
+PR #4 was merged into **main** while PR #5 was being built. The detection
+branch has been reconciled with that merged code and retains the existing
+emergency arm, rollback and reconciler implementations. PR #5 does not
 modify `ARTEX_AUTO_CONTAIN_SURICATA_SIGNATURES`, the runtime allowlist,
 or any enforcement adapter.
 
