@@ -8,6 +8,15 @@ CREATE TABLE IF NOT EXISTS defense_investigation_control (
 );
 INSERT INTO defense_investigation_control(id) VALUES(1) ON CONFLICT DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS defense_investigation_control_audit (
+ id BIGSERIAL PRIMARY KEY,
+ auto_intake BOOLEAN NOT NULL,
+ paused BOOLEAN NOT NULL,
+ actor TEXT NOT NULL DEFAULT 'console-admin',
+ reason TEXT NOT NULL CHECK(length(reason) BETWEEN 12 AND 1200),
+ occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS defense_investigation_runs (
  id BIGSERIAL PRIMARY KEY,
  case_id BIGINT NOT NULL REFERENCES defense_cases(id) ON DELETE RESTRICT,
@@ -70,7 +79,7 @@ CREATE TABLE IF NOT EXISTS defense_investigation_audit (
  run_id BIGINT NOT NULL REFERENCES defense_investigation_runs(id) ON DELETE RESTRICT,
  case_id BIGINT NOT NULL REFERENCES defense_cases(id) ON DELETE RESTRICT,
  event_type TEXT NOT NULL CHECK(event_type IN
-  ('queued','started','completed','failed','cancelled','reviewed','control_changed')),
+  ('queued','started','completed','failed','cancelled','reviewed')),
  actor TEXT NOT NULL CHECK(actor IN ('investigator','console-admin')),
  detail TEXT NOT NULL CHECK(length(detail) BETWEEN 1 AND 1200),
  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -94,6 +103,10 @@ CREATE TRIGGER defense_investigation_findings_immutable
 DROP TRIGGER IF EXISTS defense_investigation_reviews_immutable ON defense_investigation_reviews;
 CREATE TRIGGER defense_investigation_reviews_immutable
  BEFORE UPDATE OR DELETE ON defense_investigation_reviews
+ FOR EACH ROW EXECUTE FUNCTION defense_reject_investigation_mutation();
+DROP TRIGGER IF EXISTS defense_investigation_control_audit_immutable ON defense_investigation_control_audit;
+CREATE TRIGGER defense_investigation_control_audit_immutable
+ BEFORE UPDATE OR DELETE ON defense_investigation_control_audit
  FOR EACH ROW EXECUTE FUNCTION defense_reject_investigation_mutation();
 DROP TRIGGER IF EXISTS defense_investigation_audit_immutable ON defense_investigation_audit;
 CREATE TRIGGER defense_investigation_audit_immutable
