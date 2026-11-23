@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Format and print non-secret Go source for review
         run: |
-          for f in server/defense_collectors.go server/defense_collectors_test.go server/defense_telemetry.go; do
+          for f in server/defense_collectors.go server/defense_collectors_test.go server/defense_telemetry.go server/defense_correlation.go server/defense_correlation_test.go; do
             gofmt -w "$f"
             printf 'ARTEX_FMT:%s:%s\n' "$f" "$(base64 -w0 "$f")"
           done

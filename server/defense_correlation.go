@@ -21,6 +21,7 @@ const (
 type correlatedEvent struct {
 	ID         int64
 	Source     string
+	CollectorID sql.NullInt64
 	Kind       string
 	SrcIP      string
 	DstIP      string
@@ -46,19 +47,21 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 	var ruleID string
 	err := tx.QueryRowContext(ctx, `
 		SELECT e.id,e.source,e.kind,e.src_ip,e.dst_ip,e.host,
-		       e.signature,e.observed_at,a.rule_id
+		       e.signature,e.observed_at,a.rule_id,e.collector_id
 		  FROM defense_cases c
 		  JOIN defense_alerts a ON a.id=c.alert_id
 		  JOIN defense_events e ON e.id=a.event_id
 		 WHERE c.id=$1 FOR SHARE OF c`, caseID).Scan(
 		&anchor.ID, &anchor.Source, &anchor.Kind, &anchor.SrcIP,
 		&anchor.DstIP, &anchor.Host, &anchor.Signature,
-		&anchor.ObservedAt, &ruleID,
+		&anchor.ObservedAt, &ruleID, &anchor.CollectorID,
 	)
 	if err != nil {
 		return result, err
 	}
-	// Same vendor + two independent matching fields and a 30-minute window.
+	// Same collector identity (or legacy NULL) + vendor, two matching fields,
+	// and a 30-minute window. Cross-collector links need a separately
+	// validated multi-sensor correlation policy (not in this phase).
 	// Matching an IP alone (NAT/shared gateways) is not sufficient to connect
 	// events. All of these links remain unconfirmed investigative candidates.
 	rows, err := tx.QueryContext(ctx, `
@@ -67,6 +70,7 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		  FROM defense_events e
 		 WHERE e.id=$1 OR (
 		     e.source=$2
+		     AND e.collector_id IS NOT DISTINCT FROM $9::bigint
 		     AND e.observed_at BETWEEN $6 AND $7
 		     AND (
 		       ($3<>'' AND $4<>'' AND e.src_ip=$3 AND e.dst_ip=$4)
@@ -79,7 +83,7 @@ func correlateDefenseCase(ctx context.Context, tx *sql.Tx, caseID int64, actor s
 		anchor.ID, anchor.Source, anchor.SrcIP, anchor.DstIP, anchor.Host,
 		anchor.ObservedAt.Add(-caseCorrelationWindow),
 		anchor.ObservedAt.Add(caseCorrelationWindow),
-		caseCorrelationLimit)
+		caseCorrelationLimit, anchor.CollectorID)
 	if err != nil {
 		return result, err
 	}
