@@ -289,6 +289,10 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		// Vulnerability IM push delivery engine. Sits beside the Scheduler but independent: push latency demands (3s)
 		// differ from the triggers' business cadence, and neither's failures drag the other down — a stuck push must not affect agent triggers.
 		go newNotifier(s).Run(s.ctx)
+		// Durable, read-only Phase 7 investigator. Never runs in pentest mode.
+		if defense.Restricted() {
+			go s.runDefenseInvestigator()
+		}
 		logSink.SetDB(ctx, m.pg) // restore last 100 log rows and enable async persistence
 	}
 	// precedence: persisted DB config > env.
@@ -792,6 +796,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/defense/cases/{id}/intelligence/refresh", s.refreshDefenseIntelligence)
 	mux.HandleFunc("POST /api/defense/cases/{id}/intelligence/techniques", s.mapDefenseTechnique)
 	mux.HandleFunc("GET /api/defense/cases/{id}/timeline", s.getDefenseTimeline)
+	// Phase 7 autonomous evidence review: no external agents or containment.
+	mux.HandleFunc("GET /api/defense/investigations/control", s.investigationControl)
+	mux.HandleFunc("POST /api/defense/investigations/control", s.setInvestigationControl)
+	mux.HandleFunc("GET /api/defense/cases/{id}/investigations", s.listDefenseInvestigations)
+	mux.HandleFunc("POST /api/defense/cases/{id}/investigations", s.queueDefenseInvestigation)
+	mux.HandleFunc("POST /api/defense/investigations/{id}/cancel", s.cancelDefenseInvestigation)
+	mux.HandleFunc("POST /api/defense/investigations/findings/{id}/review", s.reviewDefenseFinding)
 	mux.HandleFunc("POST /api/defense/cases/{id}/responses", s.proposeDefenseResponse)
 	mux.HandleFunc("GET /api/defense/responses", s.listDefenseResponses)
 	mux.HandleFunc("POST /api/defense/responses/{id}/decision", s.decideDefenseResponse)
