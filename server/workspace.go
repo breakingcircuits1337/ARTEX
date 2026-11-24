@@ -108,7 +108,6 @@ func (s *Server) wsRel(abs string) string {
 	return filepath.ToSlash(rel)
 }
 
-
 // workspaceRootRelative converts a validated canonical workspace path to a
 // path inside an os.Root. Revalidation alone is not an authorization boundary:
 // all actual filesystem operations below must use this rooted descriptor.
@@ -490,7 +489,7 @@ func (s *Server) wsUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "missing upload file (form field file)")
 		return
 	}
-	dirRel := s.wsRel(dir.realPath)
+	dirRel = s.wsRel(dir.realPath)
 	saved := 0
 	for _, hdr := range files {
 		name := filepath.Base(hdr.Filename) // strip any path component
