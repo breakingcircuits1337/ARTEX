@@ -77,6 +77,11 @@ services:
       ARTEX_SECRET_KEY: ${ARTEX_SECRET_KEY:-}
       ARTEX_TRUSTED_PROXIES: ${ARTEX_TRUSTED_PROXIES:-}
       ARTEX_MODE: ${ARTEX_MODE:-defense}
+      # Refuse to start if the dedicated agent UID/GID boundary is missing.
+      ARTEX_REQUIRE_EXEC_ISOLATION: ${ARTEX_REQUIRE_EXEC_ISOLATION:-1}
+      # Opt-in rootless-host assurance: namespace UID 0 must map to a nonzero
+      # parent UID. Requires a rootless/userns-remapped Docker deployment.
+      ARTEX_REQUIRE_USERNS: ${ARTEX_REQUIRE_USERNS:-0}
       # PR #14–15: disabled unless explicitly enabled after data-egress approval.
       ARTEX_DEFENSE_AI_ASSIST_ENABLED: ${ARTEX_DEFENSE_AI_ASSIST_ENABLED:-0}
       ARTEX_AUTO_CONTAIN_MODE: ${ARTEX_AUTO_CONTAIN_MODE:-off}

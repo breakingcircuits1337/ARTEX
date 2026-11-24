@@ -24,6 +24,8 @@ def configured_services(file: str) -> dict:
     # Only for docker compose config interpolation; no database is started.
     env["POSTGRES_PASSWORD"] = "unit-test-placeholder-not-for-deployment"
     env["ARTEX_BIND_ADDR"] = "127.0.0.1"
+    env["ARTEX_REQUIRE_EXEC_ISOLATION"] = "1"
+    env["ARTEX_REQUIRE_USERNS"] = "0"
     cmd = ["docker", "compose", "-f", file, "config", "--format", "json"]
     try:
         result = subprocess.run(
@@ -48,6 +50,12 @@ class ContainerHardeningTests(unittest.TestCase):
                 app = services["artex"]
                 self.assertNotIn("privileged", app)
                 self.assertNotEqual(app.get("network_mode"), "host")
+                self.assertNotEqual(app.get("network_mode"), "none",
+                                    "agent and collector networking must stay available")
+                self.assertEqual(app["environment"]["ARTEX_REQUIRE_EXEC_ISOLATION"], "1",
+                                 "containers must refuse a missing agent UID boundary")
+                self.assertEqual(app["environment"]["ARTEX_REQUIRE_USERNS"], "0",
+                                 "host UID remapping is an opt-in deployment prerequisite")
                 self.assertNotEqual(app.get("pid"), "host")
                 self.assertNotEqual(app.get("ipc"), "host")
                 self.assertTrue(app.get("init"), "PID 1 must reap orphans")
