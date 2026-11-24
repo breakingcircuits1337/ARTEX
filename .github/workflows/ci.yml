@@ -30,7 +30,7 @@ jobs:
     env:
       ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -109,7 +109,7 @@ jobs:
     env:
       ARTEX_PG_DSN: postgres://artex:testpass@localhost:5432/artextest?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-go@v5
         with:
           go-version: stable
@@ -124,7 +124,7 @@ jobs:
   shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       # shellcheck is preinstalled on the ubuntu runners. -S warning: the scripts
       # currently have only info-level notes (intentional A && B || C chains in
       # update.sh, an unquoted glob in backup.sh's prune), so fail on warnings.
@@ -142,7 +142,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -160,7 +160,7 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
