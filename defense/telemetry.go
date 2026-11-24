@@ -307,7 +307,7 @@ func EvaluateEvent(e SecurityEvent) []RuleHit {
 				RuleID:   "curated_yara_" + rule.ID,
 				Title:    "Reported YARA rule match (unverified)",
 				Severity: rule.Severity,
-				Summary: summary,
+				Summary:  summary,
 			}}
 		}
 	}
