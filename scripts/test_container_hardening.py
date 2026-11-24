@@ -23,6 +23,7 @@ def configured_services(file: str) -> dict:
     env = os.environ.copy()
     # Only for docker compose config interpolation; no database is started.
     env["POSTGRES_PASSWORD"] = "unit-test-placeholder-not-for-deployment"
+    env["ARTEX_BIND_ADDR"] = "127.0.0.1"
     cmd = ["docker", "compose", "-f", file, "config", "--format", "json"]
     try:
         result = subprocess.run(
