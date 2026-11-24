@@ -13,6 +13,23 @@ Please provide the exact fork commit SHA or image digest when reporting a proble
 Vulnerabilities that affect an upstream component should also be coordinated
 with its maintainers, without disclosing a fork vulnerability publicly.
 
+## Runtime isolation and container hardening (Phase 19)
+
+The authenticated workspace file manager now binds reads, downloads,
+uploads, writes, directory creation and recursive deletion to `os.Root`,
+including pinned parent directories for atomic file replacement. Docker
+Compose runs with no-new-privileges, reduced capabilities, a process budget,
+init reaping, ephemeral `/tmp`, and read-only local skill sources.
+The release pipeline runs a checksum-verified container image vulnerability
+scan and blocks known **fixable** HIGH/CRITICAL vulnerabilities in the
+Linux/amd64 runtime image before publication.
+
+This does **not** make the main server non-root or isolate workers as a
+complete sandbox. Races involving symlinks **inside** the data root, other
+archive/restore server paths, hardlinks/mounts and native runtime caches,
+and the unscanned Linux/arm64 image remain explicitly out of scope.
+See [Phase 19 limitations and validation](docs/DEFENSE_PHASE19.md).
+
 ## Release qualification
 
 Pull requests and tagged releases now have blocking Go and Node dependency

@@ -18,7 +18,7 @@ jobs:
     name: release-preflight
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -64,12 +64,24 @@ jobs:
     permissions:
       contents: read
 
+  # The actual assembled Linux image must be scanned before either release
+  # artifacts or container images can be published. No registry credentials
+  # are exposed to the image builder or the vulnerability scanner.
+  image-security:
+    name: release-runtime-security
+    needs: [preflight, tests, security]
+    uses: ./.github/workflows/container-security.yml
+    with:
+      scan_image: true
+    permissions:
+      contents: read
+
   # ① Frontend static export (once), reused by the cross-compiled platform builds
   frontend:
-    needs: [preflight, tests, security]
+    needs: [preflight, tests, security, image-security]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -97,7 +109,7 @@ jobs:
           - { goos: darwin, goarch: arm64 }
           - { goos: windows, goarch: amd64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -137,14 +149,14 @@ jobs:
 
   # ③ Collect all zips → create the GitHub Release
   release:
-    needs: [preflight, tests, security, binaries]
+    needs: [preflight, tests, security, image-security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the Release (softprops/action-gh-release)
       id-token: write # Sigstore signing of the provenance attestation
       attestations: write # store the attestation on the repository
     steps:
-      - uses: actions/checkout@v4 # CHANGELOG.md and the extractor script
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1 # CHANGELOG.md and the extractor script
       - uses: actions/download-artifact@v4
         with:
           pattern: pkg-*
@@ -216,13 +228,13 @@ jobs:
   #    DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets). Dry runs (workflow_dispatch)
   #    build both platforms without logging in or pushing.
   docker:
-    needs: [preflight, tests, security, binaries]
+    needs: [preflight, tests, security, image-security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry

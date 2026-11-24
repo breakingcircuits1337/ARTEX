@@ -28,7 +28,7 @@ jobs:
           - language: python
             build_mode: none
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-go@v5

@@ -2,6 +2,9 @@ package server
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -105,6 +108,96 @@ func (s *Server) wsRel(abs string) string {
 	return filepath.ToSlash(rel)
 }
 
+// workspaceRootRelative converts a validated canonical workspace path to a
+// path inside an os.Root. Revalidation alone is not an authorization boundary:
+// all actual filesystem operations below must use this rooted descriptor.
+func workspaceRootRelative(cp confinedPath, abs string) (string, error) {
+	rel, err := filepath.Rel(cp.realRoot, abs)
+	if err != nil || (rel != "." && !filepath.IsLocal(rel)) {
+		return "", fmt.Errorf("workspace path escapes data root")
+	}
+	return rel, nil
+}
+
+// workspaceOpenParent pins a target's parent before creating/replacing its
+// child. Renaming or replacing that directory afterward cannot redirect file
+// operations to a different parent. The caller already checked platform-denied
+// prefixes with wsResolveConfined and must retain those checks.
+func workspaceOpenParent(cp confinedPath, abs string, create bool) (*os.Root, error) {
+	root, err := os.OpenRoot(cp.realRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	parentRel, err := workspaceRootRelative(cp, filepath.Dir(abs))
+	if err != nil {
+		return nil, err
+	}
+	if create {
+		if err := root.MkdirAll(parentRel, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	return root.OpenRoot(parentRel)
+}
+
+// workspaceAtomicWrite never opens an existing destination for writing.
+// A fresh sibling file is written using an exclusive descriptor-relative open,
+// then atomically renamed over the destination. An agent replacing the final
+// component with a symlink cannot turn this into a privileged write through
+// that symlink, and partial writes do not truncate the old file.
+func workspaceAtomicWrite(parent *os.Root, name string, src io.Reader) (runErr error) {
+	if !filepath.IsLocal(name) || filepath.Base(name) != name {
+		return fmt.Errorf("invalid workspace filename")
+	}
+	perm := os.FileMode(0o644)
+	var previous os.FileInfo
+	if fi, err := parent.Lstat(name); err == nil {
+		if !fi.Mode().IsRegular() {
+			return fmt.Errorf("refusing to replace non-regular workspace file")
+		}
+		// Overwrite must not loosen a file's permissions. Preserve the
+		// original owner/group too when the server has that authority.
+		previous = fi
+		perm = fi.Mode().Perm()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return err
+	}
+	temp := ".artex-write-" + hex.EncodeToString(nonce[:]) + ".tmp"
+	out, err := parent.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if runErr != nil {
+			_ = parent.Remove(temp)
+		}
+	}()
+	if previous != nil {
+		if err := workspacePreserveOwner(out, previous); err != nil {
+			_ = out.Close()
+			return err
+		}
+		if err := out.Chmod(perm); err != nil {
+			_ = out.Close()
+			return err
+		}
+	}
+	if _, err = io.Copy(out, src); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err = out.Close(); err != nil {
+		return err
+	}
+	// A raced symlink is replaced, not followed; the unrelated target is safe.
+	return parent.Rename(temp, name)
+}
+
 type wsEntry struct {
 	Name  string `json:"name"`
 	Path  string `json:"path"`
@@ -121,16 +214,29 @@ func (s *Server) wsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := cp.realPath
-	fi, err := os.Stat(abs)
+	rel, err := workspaceRootRelative(cp, abs)
+	if err != nil {
+		writeErr(w, 400, "invalid path")
+		return
+	}
+	root, err := os.OpenRoot(cp.realRoot)
+	if err != nil {
+		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	defer root.Close()
+	dir, err := root.Open(rel)
 	if err != nil {
 		writeErr(w, 404, "path does not exist")
 		return
 	}
-	if !fi.IsDir() {
+	defer dir.Close()
+	fi, err := dir.Stat()
+	if err != nil || !fi.IsDir() {
 		writeErr(w, 400, "not a directory")
 		return
 	}
-	ents, err := os.ReadDir(abs)
+	ents, err := dir.ReadDir(-1)
 	if err != nil {
 		writeErr(w, 500, safeFSErr(err))
 		return
@@ -168,22 +274,39 @@ func (s *Server) wsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := cp.realPath
-	fi, err := os.Stat(abs)
+	rel, err := workspaceRootRelative(cp, abs)
+	if err != nil {
+		writeErr(w, 400, "invalid path")
+		return
+	}
+	root, err := os.OpenRoot(cp.realRoot)
+	if err != nil {
+		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	defer root.Close()
+	file, err := root.Open(rel)
 	if err != nil {
 		writeErr(w, 404, "file does not exist")
 		return
 	}
-	if fi.IsDir() {
-		writeErr(w, 400, "is a directory, cannot be read as a file")
+	defer file.Close()
+	fi, err := file.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		writeErr(w, 400, "not a regular file")
 		return
 	}
 	if fi.Size() > maxWorkspaceRead {
 		writeJSON(w, 200, map[string]any{"path": s.wsRel(abs), "size": fi.Size(), "too_large": true, "binary": true})
 		return
 	}
-	data, err := os.ReadFile(abs)
+	data, err := io.ReadAll(io.LimitReader(file, maxWorkspaceRead+1))
 	if err != nil {
 		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	if len(data) > maxWorkspaceRead {
+		writeJSON(w, 200, map[string]any{"path": s.wsRel(abs), "size": int64(len(data)), "too_large": true, "binary": true})
 		return
 	}
 	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
@@ -209,16 +332,14 @@ func (s *Server) wsWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := cp.realPath
-	if fi, err := os.Stat(abs); err == nil && fi.IsDir() {
-		writeErr(w, 400, "target is a directory")
+	parent, err := workspaceOpenParent(cp, abs, true)
+	if err != nil {
+		writeErr(w, 400, safeFSErr(err))
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-		writeErr(w, 500, safeFSErr(err))
-		return
-	}
-	if err := os.WriteFile(abs, []byte(req.Content), 0o644); err != nil {
-		writeErr(w, 500, safeFSErr(err))
+	defer parent.Close()
+	if err := workspaceAtomicWrite(parent, filepath.Base(abs), strings.NewReader(req.Content)); err != nil {
+		writeErr(w, 400, safeFSErr(err))
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "path": s.wsRel(abs)})
@@ -239,8 +360,19 @@ func (s *Server) wsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := cp.realPath
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	rel, err := workspaceRootRelative(cp, abs)
+	if err != nil {
+		writeErr(w, 400, "invalid path")
+		return
+	}
+	root, err := os.OpenRoot(cp.realRoot)
+	if err != nil {
 		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	defer root.Close()
+	if err := root.MkdirAll(rel, 0o755); err != nil {
+		writeErr(w, 400, safeFSErr(err))
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "path": s.wsRel(abs)})
@@ -268,7 +400,15 @@ func (s *Server) wsDelete(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "path does not exist")
 		return
 	}
-	if err := os.RemoveAll(cp.entryPath); err != nil {
+	// Pin the parent and remove only its leaf. A directory swapped for an
+	// external symlink after authorization cannot redirect recursive removal.
+	parent, err := workspaceOpenParent(cp, cp.entryPath, false)
+	if err != nil {
+		writeErr(w, 400, safeFSErr(err))
+		return
+	}
+	defer parent.Close()
+	if err := parent.RemoveAll(filepath.Base(cp.entryPath)); err != nil {
 		writeErr(w, 500, safeFSErr(err))
 		return
 	}
@@ -283,15 +423,33 @@ func (s *Server) wsDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := cp.realPath
-	fi, err := os.Stat(abs)
-	if err != nil || fi.IsDir() {
+	rel, err := workspaceRootRelative(cp, abs)
+	if err != nil {
+		writeErr(w, 400, "invalid path")
+		return
+	}
+	root, err := os.OpenRoot(cp.realRoot)
+	if err != nil {
+		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	defer root.Close()
+	file, err := root.Open(rel)
+	if err != nil {
+		writeErr(w, 404, "file does not exist")
+		return
+	}
+	defer file.Close()
+	fi, err := file.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
 		writeErr(w, 404, "file does not exist")
 		return
 	}
 	name := filepath.Base(cp.entryPath)
-	// RFC 5987 filename* keeps non-ASCII names intact; plain filename is the fallback.
+	// ServeContent streams from the already-open, confined descriptor and
+	// retains HTTP Range/If-Modified-Since behavior without a second path open.
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+sanitizeFilename(name)+"\"; filename*=UTF-8''"+url.PathEscape(name))
-	http.ServeFile(w, r, abs)
+	http.ServeContent(w, r, name, fi.ModTime(), file)
 }
 
 // POST /api/workspace/upload?path=<dir> — multipart form field "file" (one or more).
@@ -301,21 +459,37 @@ func (s *Server) wsUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid path")
 		return
 	}
-	if fi, err := os.Stat(dir.realPath); err != nil || !fi.IsDir() {
+	// Pin the upload parent once for the entire request. Workspace agents can
+	// rename or replace its path, but not redirect this rooted handle outside.
+	dirRel, err := workspaceRootRelative(dir, dir.realPath)
+	if err != nil {
+		writeErr(w, 400, "invalid path")
+		return
+	}
+	dataRoot, err := os.OpenRoot(dir.realRoot)
+	if err != nil {
+		writeErr(w, 500, safeFSErr(err))
+		return
+	}
+	defer dataRoot.Close()
+	uploadRoot, err := dataRoot.OpenRoot(dirRel)
+	if err != nil {
 		writeErr(w, 400, "target directory does not exist")
 		return
 	}
+	defer uploadRoot.Close()
 	r.Body = http.MaxBytesReader(w, r.Body, maxWorkspaceUpload)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		writeErr(w, 400, "failed to parse upload or size limit exceeded: "+err.Error())
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
 		writeErr(w, 400, "missing upload file (form field file)")
 		return
 	}
-	dirRel := s.wsRel(dir.realPath)
+	dirRel = s.wsRel(dir.realPath)
 	saved := 0
 	for _, hdr := range files {
 		name := filepath.Base(hdr.Filename) // strip any path component
@@ -331,8 +505,18 @@ func (s *Server) wsUpload(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, "invalid path")
 			return
 		}
-		if err := saveUpload(hdr, dest.realPath); err != nil {
+		src, err := hdr.Open()
+		if err != nil {
 			writeErr(w, 500, safeFSErr(err))
+			return
+		}
+		err = workspaceAtomicWrite(uploadRoot, name, src)
+		closeErr := src.Close()
+		if err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			writeErr(w, 400, safeFSErr(err))
 			return
 		}
 		saved++
