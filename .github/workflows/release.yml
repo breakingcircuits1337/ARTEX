@@ -64,9 +64,20 @@ jobs:
     permissions:
       contents: read
 
+  # The actual assembled Linux image must be scanned before either release
+  # artifacts or container images can be published. No registry credentials
+  # are exposed to the image builder or the vulnerability scanner.
+  image-security:
+    name: release-runtime-security
+    uses: ./.github/workflows/container-security.yml
+    with:
+      scan_image: true
+    permissions:
+      contents: read
+
   # ① Frontend static export (once), reused by the cross-compiled platform builds
   frontend:
-    needs: [preflight, tests, security]
+    needs: [preflight, tests, security, image-security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +148,7 @@ jobs:
 
   # ③ Collect all zips → create the GitHub Release
   release:
-    needs: [preflight, tests, security, binaries]
+    needs: [preflight, tests, security, image-security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the Release (softprops/action-gh-release)
@@ -216,7 +227,7 @@ jobs:
   #    DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets). Dry runs (workflow_dispatch)
   #    build both platforms without logging in or pushing.
   docker:
-    needs: [preflight, tests, security, binaries]
+    needs: [preflight, tests, security, image-security, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: read
