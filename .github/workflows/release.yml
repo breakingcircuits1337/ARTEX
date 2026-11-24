@@ -69,6 +69,7 @@ jobs:
   # are exposed to the image builder or the vulnerability scanner.
   image-security:
     name: release-runtime-security
+    needs: [preflight, tests, security]
     uses: ./.github/workflows/container-security.yml
     with:
       scan_image: true
