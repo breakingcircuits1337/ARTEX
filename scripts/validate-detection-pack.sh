@@ -22,6 +22,11 @@ suricata -T \
 printf '==> Verify YARA syntax (scan empty fixture only)\n'
 : > "$tmpdir/empty"
 yara -w detectionpack/yara/artex-alert-only.yar "$tmpdir/empty"
+yara -w detectionpack/yara/aipt-artex-file-artifacts.yar "$tmpdir/empty"
+# The authenticated download concatenates both fixed assets: ensure the
+# same combined source compiles and does not collide on rule identifiers.
+cat detectionpack/yara/artex-alert-only.yar detectionpack/yara/aipt-artex-file-artifacts.yar > "$tmpdir/combined.yar"
+yara -w "$tmpdir/combined.yar" "$tmpdir/empty"
 
 printf '==> Check no duplicate Suricata SIDs\n'
 duplicates="$(grep -oE 'sid:[0-9]+' detectionpack/suricata/artex-alert-only.rules | sort | uniq -d || true)"

@@ -1,14 +1,19 @@
 # ARTEX Defense — PR #5 Detection Pack (alert-only)
 
 This pack integrates a **curated subset** of detection signatures from the two
-user-supplied archives, primarily `artex-defender-github-ready.zip`. Its
-`detection/rules/artex.rules` and `detection/yara/artex.yar` were reviewed
-alongside the earlier `ARTEXDEFENDER.zip`.
+user-supplied ARTEX-DEFENDER archives, primarily `artex-defender-github-ready.zip`.
+PR #22 adds the separately supplied `aipt_artex.yar` file-signature set by
+**Xint**, preserved with author and DRL-1.1 attribution. Its 10 signatures are
+included in the existing **manual YARA download**, not activated on the server.
+See the [source-by-source comparison and adoption review](DEFENSE_RULE_IMPORT_REVIEW.md).
 
-The uploaded package ships under **MIT** with
-Copyright (c) 2026 Breaking Circuits. The original notice is retained at
-`detectionpack/LICENSE-MIT`. ARTEX's repository-wide AGPL-3.0 obligations
-remain unchanged.
+The existing ZIP-derived subset ships under **MIT** with Copyright (c) 2026
+Breaking Circuits (`detectionpack/LICENSE-MIT`). The new AIPT rules are
+credited to **Xint**, and use the **Detection Rule License (DRL) 1.1**.
+DRL author credit must be maintained both in redistributed rule text and
+match reports. The original rule metadata is retained in
+`detectionpack/yara/aipt-artex-file-artifacts.yar`.
+ARTEX's repository-wide AGPL-3.0 obligations remain unchanged.
 
 **Important:** The pack is **NOT automatically loaded**, is not an intrusion
 prevention system, never executes YARA against local files by itself, and
@@ -20,9 +25,12 @@ malware, attacker identity, or successful exploitation.
 ## Contents and review status
 
 The source ZIP contains 18 Suricata signatures and seven YARA rule names.
-We selected **7 Suricata** and **3 YARA** rules after narrowing some
-conditions and revising their classifications. The other **15** remain
-quarantined **outside deployable rule files**.
+PR #5 selected **7 Suricata** and **3 YARA** rules after narrowing some
+conditions and revising their classifications. The other **15 ZIP-derived**
+signatures remain quarantined **outside deployable rule files**.
+PR #22 adds **10 new AIPT file-scoped YARA rules**, so the combined authenticated
+operator-only catalog now has **7 Suricata + 13 YARA = 20 rules**, and
+the existing ZIP quarantine remains at **15**.
 
 ### Included Suricata SIDs
 
@@ -50,8 +58,29 @@ decrypted traffic.
 | `ARTEX_JSP_Webshell_Numbered` | Suspicious command-executing JSP content | Generic content heuristic; inspect original file and context |
 | `ARTEX_Probe_File` | Small file containing a probe marker | Benign files and test artifacts can match |
 
+#### Supplemental AIPT file-signature set (PR #22)
+
+All ten rules from the standalone `aipt_artex.yar` have been preserved as
+`detectionpack/yara/aipt-artex-file-artifacts.yar` and are included when an
+authenticated operator downloads `/api/defense/detection-pack/yara`.
+They cover ARTEX Go binaries, web-console artifacts, LLM prompt markers,
+tool schemas, transcripts, API-recon scripts, legacy supervisors, Norma SDK,
+go-mitmproxy binaries, and go-mitmproxy CA certificates. These are **not**
+memory-process rules and some may match legitimate ARTEX, SDK and proxy tools.
+
+| Source | Author/license | Enablement |
+| --- | --- | --- |
+| `aipt_artex.yar` (10 rules) | Xint; DRL-1.1 | Operator-installed file scanning only; no built-in scan or containment |
+
+The Norma SDK and go-mitmproxy signatures are especially **non-specific**
+and should never be treated as proof of ARTEX or malicious behavior.
+Only scan files within an authorized scope, keep process/time/file-size
+budgets, and preserve the author field in YARA match notifications.
+The SOC finding summary explicitly reports **Xint (DRL-1.1)**.
+See [PR #22 import review](DEFENSE_RULE_IMPORT_REVIEW.md) for per-rule risks.
+
 YARA has no filename-matching primitive; the JSP name is inherited from
-the source archive, but **file naming is NOT enforced by the YARA rule**.
+the ZIP archive, but **file naming is NOT enforced by the YARA rule**.
 Selectively scope scans to authorized artifacts or paths, exclude the rule
 pack and your own test fixtures, and keep scan output as evidence rather
 than proof of compromise.
@@ -155,9 +184,10 @@ submit an observation using the existing Phase 2 generic event contract:
 }
 ```
 
-A report matching **one of the three curated YARA names** produces a
-`curated_yara_*` SOC alert labeled **unverified** and references the
-original submitted event. Other generic events remain unaffected.
+A report matching a **cataloged YARA name** (three ZIP-derived plus ten AIPT)
+produces a `curated_yara_*` SOC alert labeled **unverified** and references
+the original submitted event. AIPT matches retain **Xint / DRL-1.1**
+attribution in the alert summary. Other generic events remain unaffected.
 The report cannot request a local YARA execution, remote file read,
 endpoint isolation, or automatic firewall intervention.
 

@@ -11,18 +11,21 @@ import (
 	"strings"
 )
 
-//go:embed manifest.json suricata/artex-alert-only.rules yara/artex-alert-only.yar
+//go:embed manifest.json suricata/artex-alert-only.rules yara/artex-alert-only.yar yara/aipt-artex-file-artifacts.yar
 var assets embed.FS
 
 const (
 	SuricataRulesPath = "suricata/artex-alert-only.rules"
 	YARARulesPath     = "yara/artex-alert-only.yar"
+	AIPTYARARulesPath = "yara/aipt-artex-file-artifacts.yar"
 )
 
 type Rule struct {
 	Engine                  string `json:"engine"`
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
+	Author                  string `json:"author,omitempty"`
+	License                 string `json:"license,omitempty"`
 	Severity                string `json:"severity"`
 	FalsePositiveRisk       string `json:"false_positive_risk"`
 	Limitations             string `json:"limitations"`
@@ -86,7 +89,21 @@ func Rules(engine string) ([]byte, error) {
 	case "suricata":
 		return assets.ReadFile(SuricataRulesPath)
 	case "yara":
-		return assets.ReadFile(YARARulesPath)
+		base, err := assets.ReadFile(YARARulesPath)
+		if err != nil {
+			return nil, err
+		}
+		// One fixed, operator-downloadable artifact; no dynamic file paths.
+		// Additional AIPT file signatures retain their original DRL author
+		// attribution and do not enable live process/file scans on ARTEX.
+		aipt, err := assets.ReadFile(AIPTYARARulesPath)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]byte, 0, len(base)+len(aipt)+2)
+		out = append(out, base...)
+		out = append(out, '\n', '\n')
+		return append(out, aipt...), nil
 	case "sigma":
 		return SigmaArtifact()
 	default:
@@ -126,6 +143,13 @@ func Validate() error {
 			rule.Severity == "" || rule.FalsePositiveRisk == "" ||
 			!rule.OperatorInstallRequired || rule.AutoContainmentEligible || seen[key] {
 			return fmt.Errorf("invalid, duplicate, or auto-active detection %q", key)
+		}
+		// DRL-1.1 mandates author credit both when redistributing the rule
+		// and when displaying matches. Enforce explicit catalog metadata.
+		if strings.HasPrefix(rule.ID, "AIPT_") {
+			if rule.Engine != "yara" || rule.Author != "Xint" || rule.License != "DRL-1.1" || !strings.Contains(rule.Name, "Xint") {
+				return fmt.Errorf("AIPT rule lacks DRL-1.1 attribution: %q", key)
+			}
 		}
 		seen[key] = true
 		selected[key] = true
