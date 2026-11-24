@@ -162,7 +162,7 @@ func TestHealthSyncDropsStaleWrite(t *testing.T) {
 	// so the pending and applied sequences cannot change concurrently.
 	writes := 0
 	h := &healthSync{
-		save: func(db.LLMHealth) error {
+		save:    func(db.LLMHealth) error {
 			writes++
 			return nil
 		},
