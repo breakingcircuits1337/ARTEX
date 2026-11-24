@@ -612,7 +612,10 @@ func enterExecutor(uid, gid int) error {
 			}
 		}
 	}
-	return dropTo(uid, gid)
+	if err := dropTo(uid, gid); err != nil {
+		return err
+	}
+	return lockExecutorPrivileges()
 }
 
 // runDropShim handles: <uid> <gid> -- <command> <args...>.
