@@ -297,12 +297,17 @@ func EvaluateEvent(e SecurityEvent) []RuleHit {
 	// grants permission for live scanning or automated containment.
 	if e.Source == "generic" && e.Kind == "endpoint" && e.Signature != "" {
 		if rule, ok := detectionpack.LookupRule("yara", e.Signature); ok {
+			summary := "Operator-submitted scanner observation for " + rule.ID +
+				". Correlate original scan evidence and check benign context before escalation."
+			if rule.Author != "" {
+				// DRL-1.1 requires showing the rule's author in match messages.
+				summary += " Rule author: " + rule.Author + " (" + rule.License + ")."
+			}
 			return []RuleHit{{
 				RuleID:   "curated_yara_" + rule.ID,
 				Title:    "Reported YARA rule match (unverified)",
 				Severity: rule.Severity,
-				Summary: "Operator-submitted scanner observation for " + rule.ID +
-					". Correlate original scan evidence and check benign context before escalation.",
+				Summary: summary,
 			}}
 		}
 	}
