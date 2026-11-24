@@ -35,9 +35,6 @@ func TestValidateRuntimeIsolationUserNSFailsOnHostRoot(t *testing.T) {
 	// This test does not inspect or change the host mapping. If the test
 	// process runs as host-root in the initial namespace, mandatory userns
 	// isolation must fail; under rootless CI the same check can succeed.
-	raw, err := checkUserNamespaceRootMapping(), error(nil)
-	_ = raw
-	_ = err
 	t.Setenv("ARTEX_REQUIRE_EXEC_ISOLATION", "1")
 	t.Setenv("ARTEX_REQUIRE_USERNS", "1")
 	// The result must be the real mapping check, not a silent bypass.
