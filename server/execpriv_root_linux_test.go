@@ -96,6 +96,7 @@ func (f *execRootFixture) probe() string {
 if cat '%s' >/dev/null 2>&1; then echo secret=read; else echo secret=denied; fi
 if cat /proc/%d/environ >/dev/null 2>&1; then echo environ=read; else echo environ=denied; fi
 echo "home=$HOME cache=$XDG_CACHE_HOME"
+echo "no_new_privs=$(awk '/^NoNewPrivs:/ {print $2}' /proc/self/status)"
 if mkdir -p "$XDG_CACHE_HOME/probe" && echo ok > "$XDG_CACHE_HOME/probe/x"; then echo cache=written; else echo cache=failed; fi
 `, f.secret, os.Getpid())
 }
@@ -136,6 +137,9 @@ func TestExecutorBashShimAsRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.check(t, "bash shim", res.Flatten())
+	if !strings.Contains(res.Flatten(), "no_new_privs=1") {
+		t.Fatal("Bash shim did not lock privilege escalation with PR_SET_NO_NEW_PRIVS")
+	}
 }
 
 // A custom script tool runs through execPython, which applies the credential.
@@ -258,6 +262,39 @@ func TestExecutorMCPStdioAsRoot(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	f.check(t, "mcp stdio", string(out))
+	if !strings.Contains(string(out), "no_new_privs=1") {
+		t.Fatal("MCP shim did not lock privilege escalation with PR_SET_NO_NEW_PRIVS")
+	}
+}
+
+// The executor home can be controlled after it is created, but at startup
+// even a planted symlink must never redirect the server's privileged chmod
+// or chown onto a directory outside the intended executor home.
+func TestPrepareExecHomeRejectsSymlinkAsRoot(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("needs root")
+	}
+	dataDir := t.TempDir()
+	outside := t.TempDir()
+	before, err := os.Stat(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dataDir, execHomeDir)); err != nil {
+		t.Fatal(err)
+	}
+	priv := ExecPrivilege{Enabled: true, UID: DefaultExecUID, GID: DefaultExecGID}
+	if err := prepareExecHome(priv, dataDir); err == nil {
+		t.Fatal("symlinked executor home was accepted")
+	}
+	after, err := os.Stat(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, a := before.Sys().(*syscall.Stat_t), after.Sys().(*syscall.Stat_t)
+	if b.Uid != a.Uid || b.Gid != a.Gid || before.Mode().Perm() != after.Mode().Perm() {
+		t.Fatal("rejected symlink changed outside directory ownership or permissions")
+	}
 }
 
 // The directory of Norma's background-task output is created when absent. A symlink
