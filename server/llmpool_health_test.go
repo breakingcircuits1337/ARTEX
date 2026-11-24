@@ -155,22 +155,22 @@ func TestHealthSyncEnqueueDoesNotWaitOnSave(t *testing.T) {
 }
 
 func TestHealthSyncDropsStaleWrite(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	// This test exercises apply's ordering check, not the background loop.
+	// newHealthSync starts the loop immediately; that worker can consume
+	// pending[6] before apply(6) checks it, making the stale-write assertion
+	// nondeterministic (especially under -race). Build an inert fixture here
+	// so the pending and applied sequences cannot change concurrently.
 	writes := 0
-	h := newHealthSync(ctx,
-		func(db.LLMHealth) error {
+	h := &healthSync{
+		save: func(db.LLMHealth) error {
 			writes++
 			return nil
 		},
-		func(int64) error { return nil },
-	)
-	h.mu.Lock()
-	h.seq = 4
-	h.applied[5] = 2
-	h.pending[6] = healthOp{seq: 4, clear: true}
-	h.mu.Unlock()
+		clear:   func(int64) error { return nil },
+		pending: map[int64]healthOp{6: {seq: 4, clear: true}},
+		applied: map[int64]uint64{5: 2},
+		seq:     4,
+	}
 	if err := h.apply(5, healthOp{seq: 1, st: llmpool.State{Fails: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -179,5 +179,12 @@ func TestHealthSyncDropsStaleWrite(t *testing.T) {
 	}
 	if writes != 0 {
 		t.Fatalf("stale writes=%d", writes)
+	}
+	// A newer operation must still be eligible for persistence.
+	if err := h.apply(5, healthOp{seq: 5, st: llmpool.State{Fails: 5}}); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 {
+		t.Fatalf("fresh writes=%d, want 1", writes)
 	}
 }
