@@ -18,7 +18,7 @@ func TestCatalogOnlyContainsAlertRules(t *testing.T) {
 		catalog.ExecutionEnabled || catalog.AutonomousContainmentEnabled {
 		t.Fatal("catalog could activate defensive actions")
 	}
-	if catalog.RuleCount != 10 || catalog.QuarantinedCount != 15 {
+	if catalog.RuleCount != 20 || catalog.QuarantinedCount != 15 {
 		t.Fatalf("unexpected curated/quarantined counts: %+v", catalog)
 	}
 	for _, rule := range catalog.Rules {
@@ -47,6 +47,12 @@ func TestDownloadsAreFixedAlertOnlyAssets(t *testing.T) {
 		}
 	}
 	suricata, _ := Rules("suricata")
+	yara, _ := Rules("yara")
+	if !strings.Contains(string(yara), "rule AIPT_ARTEX_Go_Binary") ||
+		!strings.Contains(string(yara), `author = "Xint"`) ||
+		!strings.Contains(string(yara), "DRL") {
+		t.Fatal("AIPT rules or attribution missing from operator-only YARA download")
+	}
 	if !strings.Contains(string(suricata), "sid:9900001;") {
 		t.Fatal("expected source-derived signature missing")
 	}
@@ -56,6 +62,11 @@ func TestCatalogYARANameLookupIsStrict(t *testing.T) {
 	if rule, ok := LookupRule("yara", "ARTEX_JSP_Webshell_Numbered"); !ok ||
 		rule.AutoContainmentEligible || rule.Severity != "high" {
 		t.Fatalf("curated YARA lookup failed: %+v found=%v", rule, ok)
+	}
+	if rule, ok := LookupRule("yara", "AIPT_ARTEX_Transcript_File"); !ok ||
+		rule.Author != "Xint" || rule.License != "DRL-1.1" || rule.AutoContainmentEligible ||
+		!strings.Contains(rule.Name, "Xint") {
+		t.Fatalf("AIPT attribution or containment guard invalid: %+v found=%v", rule, ok)
 	}
 	if _, ok := LookupRule("yara", "ARTEX_Config_File"); ok {
 		t.Fatal("quarantined YARA signature was accepted")
