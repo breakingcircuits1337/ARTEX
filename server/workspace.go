@@ -151,10 +151,16 @@ func workspaceAtomicWrite(parent *os.Root, name string, src io.Reader) (runErr e
 	if !filepath.IsLocal(name) || filepath.Base(name) != name {
 		return fmt.Errorf("invalid workspace filename")
 	}
+	perm := os.FileMode(0o644)
+	var previous os.FileInfo
 	if fi, err := parent.Lstat(name); err == nil {
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("refusing to replace non-regular workspace file")
 		}
+		// Overwrite must not loosen a file's permissions. Preserve the
+		// original owner/group too when the server has that authority.
+		previous = fi
+		perm = fi.Mode().Perm()
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -163,7 +169,7 @@ func workspaceAtomicWrite(parent *os.Root, name string, src io.Reader) (runErr e
 		return err
 	}
 	temp := ".artex-write-" + hex.EncodeToString(nonce[:]) + ".tmp"
-	out, err := parent.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	out, err := parent.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return err
 	}
@@ -172,6 +178,16 @@ func workspaceAtomicWrite(parent *os.Root, name string, src io.Reader) (runErr e
 			_ = parent.Remove(temp)
 		}
 	}()
+	if previous != nil {
+		if err := workspacePreserveOwner(out, previous); err != nil {
+			_ = out.Close()
+			return err
+		}
+		if err := out.Chmod(perm); err != nil {
+			_ = out.Close()
+			return err
+		}
+	}
 	if _, err = io.Copy(out, src); err != nil {
 		_ = out.Close()
 		return err
