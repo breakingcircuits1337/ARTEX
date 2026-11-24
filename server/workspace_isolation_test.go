@@ -89,6 +89,29 @@ func TestWorkspaceAtomicWriteRejectsFinalSymlinkAndDirectory(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAtomicWriteKeepsExistingPermissions(t *testing.T) {
+	data := t.TempDir()
+	file := filepath.Join(data, "private.txt")
+	if err := os.WriteFile(file, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := workspaceAtomicWrite(root, "private.txt", strings.NewReader("updated")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("atomic replacement changed original permissions to %04o", got)
+	}
+}
+
 func TestWorkspaceRootedDeleteKeepsPinnedParent(t *testing.T) {
 	data := t.TempDir()
 	outside := t.TempDir()
@@ -145,7 +168,9 @@ func TestWorkspaceHandlersRootedFileLifecycle(t *testing.T) {
 		t.Fatalf("write=%d: %s", rec.Code, rec.Body.String())
 	}
 	rec := call(s.wsRead, "GET", "/api/workspace/read?path=notes/hello.txt", nil)
-	var read struct { Content string `json:"content"` }
+	var read struct {
+		Content string `json:"content"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil || read.Content != "hello" {
 		t.Fatalf("read=%d: %s (%v)", rec.Code, rec.Body.String(), err)
 	}
