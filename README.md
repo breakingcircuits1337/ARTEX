@@ -6,16 +6,18 @@
 
 **Breaking Circuits' evidence-first SOC and security assessment platform.**
 
-**Detect → Correlate → Investigate → Review → Respond → Recover** · Defense phases **1–15** · Human-controlled AI and containment.
+**Detect → Correlate → Investigate → Review → Respond → Recover** · Defensive development through **PR #20** · Human-controlled AI and containment.
 
 A self-hosted Go + PostgreSQL security platform with an embedded Next.js console.
 
 [![CI](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/ci.yml)
+[![Dependency security](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/security-gates.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/security-gates.yml)
+[![Container policy checks](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/container-security.yml/badge.svg?branch=main)](https://github.com/breakingcircuits1337/ARTEX-DEFENSE/actions/workflows/container-security.yml)
 [![License](https://img.shields.io/github/license/breakingcircuits1337/ARTEX-DEFENSE?color=6b34db)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/breakingcircuits1337/ARTEX-DEFENSE?color=6b34db)](go.mod)
 [![Upstream releases](https://img.shields.io/github/v/release/BaaRai/ARTEX?label=upstream%20release&color=6b34db)](https://github.com/BaaRai/ARTEX/releases)
 
-[Quick start](#quick-start) · [What's included](#artex-defense-capabilities) · [SOC workflow](#defense-quick-start) · [AI review](#ai-assisted-investigation-and-evidence-preview) · [API & monitoring](#defense-api-and-operational-monitoring) · [Safety](#defensive-response-safety) · [Install](#installation) · [Original ARTEX](#original-penetration-testing-engine) · [Security](SECURITY.md)
+[Quick start](#quick-start) · [Capabilities](#artex-defense-capabilities) · [SOC workflow](#defense-quick-start) · [AI review](#ai-assisted-investigation-and-evidence-preview) · [Runtime hardening](#runtime-isolation-and-hardening) · [Rootless host](#optional-rootless-host-deployment) · [API & monitoring](#defense-api-and-operational-monitoring) · [Install](#installation) · [Safety](#defensive-response-safety) · [Security policy](SECURITY.md)
 
 </div>
 
@@ -88,6 +90,48 @@ Defense mode is the **default in this fork's packaged installations**, an eviden
 | **PR #13** | Operational health, bounded read-only PostgreSQL snapshots, Prometheus metrics and SOC readiness card | Admin-only low-cardinality metrics, process-local latency and errors, health warnings; **not an SLA or sensor attestation** | [Operational readiness](docs/DEFENSE_PHASE13.md) |
 | **PR #14** | Opt-in, evidence-grounded AI advisory review and immutable human verdicts | Redacted case facts, strict citation validation, model with zero tools, per-call consent, audited decisions; **no autonomous enforcement** | [AI-assisted defensive review](docs/DEFENSE_PHASE14.md) |
 | **PR #15** | Human-reviewed AI evidence preview and offline model output safety evaluations | Exact packet SHA-256 consent, stale-preview rejection, bounded lexical checks, PG no-egress tests; **not semantic validation or a signed attestation** | [AI evidence and safety gates](docs/DEFENSE_PHASE15.md) |
+| **PR #17** | Defense-by-default direct binary operation and additional trusted file-open boundaries | Direct invocation defaults to restricted `defense`; archive-source reads, operator image attachments and upload staging use confined file handles; **not a complete sandbox** | [Default mode and security isolation](docs/DEFENSE_PHASE17.md) |
+| **PR #18** | Enforced PR dependency checks and release qualification | Go vulnerability checks, production npm advisory gate, CodeQL, tagged-SHA test matrix, release checksums/SBOM and attestations; **not a certification** | [Release security gates](docs/DEFENSE_PHASE18.md) |
+| **PR #19** | Descriptor-rooted workspace operations and safer container defaults | Root-confined workspace APIs and atomic file writes, reduced container capabilities, process/tmpfs limits and release-gated Linux/amd64 image CVE scanning | [Runtime and container hardening](docs/DEFENSE_PHASE19.md) |
+| **PR #20** | Rootless-host deployment path and fail-closed executor safeguards | Separate executor UID enforced in Compose; optional UID-remapped host root, Linux `no_new_privs` for Bash/MCP agent shims; **network access preserved** | [Rootless host and agent execution](docs/DEFENSE_PHASE20.md) |
+
+
+### Runtime isolation and hardening
+
+ARTEX separates its **control plane** (server, credentials and evidence) from its **execution plane** (Bash, custom tools and MCP stdio). PRs #17–#20 strengthen these boundaries without introducing an outbound-network deny policy. Normal sensor collection, threat-intelligence lookups, authorized testing and remote-model connections remain possible under the existing operating modes and authorization rules.
+
+| Boundary | Current protection | Important limit |
+| --- | --- | --- |
+| Agent identity | Docker Compose requires a separate executor UID/GID (default `10001:10001`); startup refuses disabled/unavailable isolation | Agent tasks still **share** that executor identity; no per-task user or mount namespace |
+| Privilege escalation | Compose uses `no-new-privileges`; Linux Bash/MCP shims also apply `PR_SET_NO_NEW_PRIVS` after switching UID/GID | Not a complete shell syscall sandbox; direct-binary custom Python execution has a different launch path |
+| Workspace files | `os.Root`-confined workspace operations, pinned parent handles, atomic replacement and symlink refusals | Internal subtree races, hard links, mount boundaries and archive restoration need further work |
+| Container | Reduced Linux capabilities, PID limit, init process, ephemeral `/tmp`, read-only source-mounted skills | Server remains UID 0 **inside** the container; `read_only` root filesystem is not yet enabled |
+| Host-root separation | Optional Linux UID remapping, with startup UID-map verification and a rootless Docker daemon preflight | Not enabled by default; requires host setup and bind-mount / volume migration review |
+| Software supply chain | Go/Node vulnerability checks, CodeQL and a release-blocking Linux/amd64 runtime-image scan | The full image scan is **skipped for normal PRs**; unfixed advisories, arm64 images and non-package binaries require additional review |
+
+**Networking remains available.** PR #20 does not add egress allowlists, firewall rules, proxy restrictions or disabled network namespaces. PR #19 does drop `NET_RAW` from the standard container, which can affect raw-socket features (such as some ICMP scans). Authorized active assessments that require it need a separately reviewed Compose override. A rootless Docker daemon can also have networking differences of its own; test collector and assessment connectivity in that environment.
+
+#### Optional rootless-host deployment
+
+For a **Linux host with a properly installed rootless Docker daemon**, use a rootless Docker context and explicitly opt into the UID-map requirement:
+
+```bash
+cp .env.example .env                 # configure a strong POSTGRES_PASSWORD
+docker context ls                    # verify your rootless context exists
+docker context use rootless          # only after rootless Docker is installed
+
+# Edit .env to contain:
+# ARTEX_REQUIRE_EXEC_ISOLATION=1     (Compose default)
+# ARTEX_REQUIRE_USERNS=1             (opt in to host UID remapping)
+
+bash scripts/rootless-preflight.sh local
+docker compose up -d --build
+docker compose logs -f artex
+```
+
+**Do not equate membership in the `docker` group with running a rootless daemon.** Back up `data/`, `keys/` and PostgreSQL data before migrating; host-visible ownership and write permissions can change under UID remapping. Avoid bulk `chown` of production secrets or volumes without checking the actual mappings. For a released image, use `bash scripts/rootless-preflight.sh ghcr` with `docker-compose.ghcr.yml`.
+
+Existing rootful deployments can keep `ARTEX_REQUIRE_USERNS=0` while retaining the mandatory **separate executor**. The principal Go server is **namespace-root**, not a truly non-root process within the container. Rootless deployment, isolated tasks, archive restoration and network-intensive tool compatibility must be validated for the specific host. See [Phase 19](docs/DEFENSE_PHASE19.md), [Phase 20](docs/DEFENSE_PHASE20.md) and the [security policy](SECURITY.md).
 
 ### Defense architecture
 
@@ -210,6 +254,10 @@ All defense routes below are under `/api`; except minimal `/api/health` and `/ap
 | Monitor collector reporting, ingestion failures, investigation backlog and emergency readiness | [PR #13: Operational observability](docs/DEFENSE_PHASE13.md) |
 | Run an expressly consented, grounded AI review and record a human decision | [PR #14: AI advisory review](docs/DEFENSE_PHASE14.md) |
 | Preview exactly what AI receives, bind consent to the packet digest, and validate safe advisory output | [PR #15: AI evidence safety](docs/DEFENSE_PHASE15.md) |
+| Check direct-binary defense defaults and confined archive/image reads | [PR #17: Security hardening](docs/DEFENSE_PHASE17.md) |
+| Review CI, advisory checks, artifact verification, SBOMs and release signoff | [PR #18: Release qualification](docs/DEFENSE_PHASE18.md) |
+| Assess workspace path confinement, container policy and release image scanning | [PR #19: Runtime container security](docs/DEFENSE_PHASE19.md) |
+| Plan rootless Docker migration and require dedicated agent process privileges | [PR #20: Rootless host and executor safeguards](docs/DEFENSE_PHASE20.md) |
 
 ---
 
@@ -466,7 +514,7 @@ worker remains confined to the intent it claimed.
 
 ## Installation
 
-> **Breaking Circuits fork:** Build from this repository to get the implemented defense capabilities through PR #15. The upstream `ghcr.io/baarai/artex` image and BaaRai releases are **not** ARTEX-DEFENSE builds.
+> **Breaking Circuits fork:** Build from this repository to get the defensive and runtime-hardening capabilities through PR #20. The upstream `ghcr.io/baarai/artex` image and BaaRai releases are **not** ARTEX-DEFENSE builds.
 
 > Requires **PostgreSQL**; exploration requires an **LLM** (`ANTHROPIC_API_KEY` or
 > `OPENAI_API_KEY`, also configurable in the UI).
@@ -505,7 +553,8 @@ docker compose up -d --build
 The source-built Compose stack is the **supported installation path for this fork today**.
 The image is built locally from this checkout, not pulled from an upstream package.
 Its dashboard binds to `127.0.0.1:8787` by default and the traffic proxy to
-`127.0.0.1:8788`. To expose the console on another machine, configure a
+`127.0.0.1:8788`.
+The Compose runtime requires the dedicated agent executor identity (`ARTEX_REQUIRE_EXEC_ISOLATION=1`). If you're using a verified rootless Docker daemon, you can additionally set `ARTEX_REQUIRE_USERNS=1` and run [the rootless-host preflight](#optional-rootless-host-deployment) before starting containers. No rootless migration is required for existing rootful installations. To expose the console on another machine, configure a
 properly authenticated TLS reverse proxy or private tunnel; do not publish an
 administrator console or telemetry endpoint directly to the Internet.
 
@@ -569,6 +618,8 @@ runtime supports it.
 ## Configuration
 
 **Defense mode and opt-in AI (source-built Docker Compose):** `.env.example` sets `ARTEX_MODE=defense`, `ARTEX_AUTO_CONTAIN_MODE=off`, and `ARTEX_DEFENSE_AI_ASSIST_ENABLED=0`. Source-build and future fork-image Compose files forward these values into the backend. AI is not enabled merely by configuring an LLM; the operator must separately set the AI flag to `1`, recreate the container, preview case data, and consent to each call. Disabling the flag prevents future preview/model POST access without deleting historical advisory records. See [AI setup](#ai-assisted-investigation-and-evidence-preview).
+
+**Execution safeguards (PR #20):** `.env.example` and both Compose files set `ARTEX_REQUIRE_EXEC_ISOLATION=1`; an unavailable agent UID/GID drop prevents startup. `ARTEX_REQUIRE_USERNS=0` preserves current rootful-host compatibility; use `1` only with a verified Linux user-namespace-remapped deployment. Network connectivity is not disabled. See [Runtime hardening](#runtime-isolation-and-hardening) and [Rootless host setup](#optional-rootless-host-deployment).
 
 **Database** (`config.json`, `ARTEX_PG_DSN`, or `ARTEX_PG_*` environment variables — see [External PostgreSQL](#external-postgresql)):
 
@@ -1032,8 +1083,12 @@ Operational security properties:
 - **Login protection**: 10 attempts per minute per client IP, with `ARTEX_TRUSTED_PROXIES` for
   correct client attribution behind a reverse proxy.
 - **Untrusted tool output**: framed as data for every agent by default (prompt-injection boundary).
+- **Defense and response defaults**: restricted `ARTEX_MODE=defense`; automatic containment off until separately configured and armed.
+- **Agent execution**: the Compose control plane and executor use different UIDs; Linux Bash/MCP shims enforce `no_new_privs` after dropping privileges. Rootless-host UID remapping is opt-in, not a full per-task sandbox.
+- **Filesystem and container controls**: descriptor-confined workspace operations, atomic writes, reduced container capabilities, bounded process counts and read-only host-mounted skills.
+- **Network compatibility**: no default outbound deny policy; raw-socket tools may require an explicitly reviewed capability override, and rootless Docker networking must be tested.
 - **Release integrity**: SHA-256 sums, CycloneDX SBOM and GitHub build provenance attestations for
-  release archives.
+  release archives; final Linux/amd64 image CVE assessment is a separate release gate.
 
 ---
 
