@@ -164,6 +164,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate production Compose runtime isolation
+        run: python3 scripts/test_container_hardening.py
       - run: python3 -m unittest discover -s scripts -p 'test_release_qualification.py' -v
       - run: python3 scripts/posture_check_test.py
       - run: python3 scripts/test_defense_forwarder.py
