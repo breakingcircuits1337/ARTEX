@@ -33,6 +33,23 @@ services:
     # or file capability may raise them back to root.
     security_opt:
       - "no-new-privileges:true"
+    # The daemon needs CHOWN/SETUID/SETGID for its deliberate executor drop,
+    # but not raw sockets, chroot, setcap, mknod or low-port binding.
+    # Active authorized scans requiring NET_RAW need a reviewed opt-in override.
+    cap_drop:
+      - NET_RAW
+      - MKNOD
+      - SYS_CHROOT
+      - SETPCAP
+      - SETFCAP
+      - NET_BIND_SERVICE
+    # Bound fork-bomb damage and keep temporary uploads/browser files ephemeral.
+    # Leave /app/data and /app/keys persistent; do not run read_only until
+    # all third-party tools have controlled cache directories.
+    pids_limit: 1024
+    init: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
     depends_on:
       postgres:
         condition: service_healthy
