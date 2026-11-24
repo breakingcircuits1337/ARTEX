@@ -191,6 +191,12 @@ func run() int {
 		log.Printf("[config] %v", err)
 		return 1
 	}
+	// Refuse startup if an operator-selected user namespace or executor
+	// identity boundary is missing. Never silently fall back to same-UID.
+	if err := server.ValidateRuntimeIsolation(priv); err != nil {
+		log.Printf("[config] %v", err)
+		return 1
+	}
 	if err := server.PrepareExecPrivilege(&priv, *dataDir, config.KeyDir(), config.Path()); err != nil {
 		log.Printf("[config] %v", err)
 		return 1
