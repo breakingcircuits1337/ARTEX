@@ -13,6 +13,24 @@ Please provide the exact fork commit SHA or image digest when reporting a proble
 Vulnerabilities that affect an upstream component should also be coordinated
 with its maintainers, without disclosing a fork vulnerability publicly.
 
+## Rootless-host deployment and execution safeguards (Phase 20)
+
+When explicitly requested, ARTEX refuses startup unless Linux user
+namespace UID 0 maps to a nonzero parent UID and the separate agent
+executor UID/GID drop remains active. Compose deployments now require
+the executor drop by default. Linux Bash and MCP command shims set
+`PR_SET_NO_NEW_PRIVS` after dropping identity. The executor home is
+opened without following a symlink before privileged ownership changes.
+This strengthens host/agent separation **without changing agent network
+connectivity or introducing hidden egress policies**.
+
+A rootless Docker daemon plus the opt-in guard protects the host-root
+boundary, but the Go server remains namespace-root inside the container.
+Per-task identities, complete filesystem sandboxing and the archive
+restore audit remain follow-on security work. Full instructions, tests,
+compatibility warnings and limitations are in
+[PR #20 security notes](docs/DEFENSE_PHASE20.md).
+
 ## Runtime isolation and container hardening (Phase 19)
 
 The authenticated workspace file manager now binds reads, downloads,
