@@ -575,13 +575,21 @@ func TestWorkspaceUploadSymlinkConfinement(t *testing.T) {
 			t.Fatalf("uploaded file = %q, want HELLO_UPLOAD", got)
 		}
 	})
-	t.Run("allow_overwrite_inside_file_symlink", func(t *testing.T) {
+	// PR #19 deliberately tightens the upload policy: even an in-root
+	// final-component symlink must not be used as an overwrite target. A
+	// writable agent could otherwise swap its link between validation and
+	// the privileged file operation. The target and link must remain intact.
+	t.Run("reject_overwrite_inside_file_symlink", func(t *testing.T) {
 		rr := doUploadReq(t, s, "", "in-file-rel", "VIA_LINK")
-		if rr.Code != http.StatusOK {
-			t.Fatalf("wsUpload('', in-file-rel) = %d (%s), want 200", rr.Code, rr.Body.String())
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("wsUpload('', in-file-rel) = %d (%s), want 400", rr.Code, rr.Body.String())
 		}
-		if got, _ := os.ReadFile(filepath.Join(f.root, "inside.txt")); string(got) != "VIA_LINK" {
-			t.Fatalf("inside.txt = %q, want VIA_LINK", got)
+		assertNoAbsPathLeak(t, rr.Body.String(), f.root, f.outside)
+		if got, _ := os.ReadFile(filepath.Join(f.root, "inside.txt")); string(got) != "INSIDE_OK" {
+			t.Fatalf("inside.txt changed through upload symlink: %q", got)
+		}
+		if info, err := os.Lstat(filepath.Join(f.root, "in-file-rel")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("existing upload symlink was replaced or removed: mode=%v err=%v", info, err)
 		}
 	})
 }
