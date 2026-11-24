@@ -75,17 +75,25 @@ func prepareExecHome(p ExecPrivilege, dataDir string) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
-	fi, err := os.Lstat(home)
+	// Pin the home directory before changing its ownership or permissions.
+	// A symlink planted at the final path must not redirect a privileged
+	// chmod/chown into another part of the data tree or the host.
+	homeFD, err := os.OpenFile(home, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return fmt.Errorf("open executor home without following symlinks: %w", err)
+	}
+	defer homeFD.Close()
+	fi, err := homeFD.Stat()
 	if err != nil {
 		return err
 	}
 	if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", home)
 	}
-	if err := os.Lchown(home, int(p.UID), int(p.GID)); err != nil {
+	if err := homeFD.Chown(int(p.UID), int(p.GID)); err != nil {
 		return err
 	}
-	if err := os.Chmod(home, 0o700); err != nil {
+	if err := homeFD.Chmod(0o700); err != nil {
 		return err
 	}
 	return os.Setenv(envExecHome, home)
